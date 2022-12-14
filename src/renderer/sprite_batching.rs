@@ -129,7 +129,7 @@ pub fn prepare_sprites_for_batching(
 
         let texture = sprite_assets.data.get(&sprite.texture_id).unwrap();
         let current_image_size =
-            Vec2::new(texture.dimensions.0 as f32, texture.dimensions.1 as f32) * 0.001;
+            Vec2::new(texture.dimensions.0 as f32, texture.dimensions.1 as f32);
 
         // By default, the size of the quad is the size of the texture
         let mut quad_size = current_image_size;

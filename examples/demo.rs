@@ -1,5 +1,5 @@
 use bevy_ecs::prelude::{Component, Query};
-use krabby::{
+use guacamole::{
     renderer::sprite::{Sprite, SpriteBundle},
     transform::Transform,
     App,
@@ -26,7 +26,7 @@ fn main() {
 
     let image = include_bytes!("happy-tree.png");
 
-    let mut app = App::new(krabby::window::WindowDescriptor {
+    let mut app = App::new(guacamole::window::WindowDescriptor {
         title: "app".to_string(),
         width: 1280.,
         height: 720.,
