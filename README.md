@@ -1,4 +1,4 @@
-# guacamole
+# 🥑 guacamole 🥑
 A small toy game engine built in rust, built to learn game engine &amp; gfx programming.
 
 
