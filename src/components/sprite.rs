@@ -10,35 +10,6 @@ use crate::{
 use bevy_ecs::prelude::{Bundle, Component};
 use glam::Vec2;
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable, Component)]
-pub struct Vertex {
-    pub position: [f32; 3],
-    pub uv: [f32; 2],
-}
-
-impl Vertex {
-    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-            ],
-        }
-    }
-}
-
 #[derive(Bundle, Default, Debug)]
 pub struct SpriteBundle {
     pub sprite: Sprite,
@@ -48,8 +19,8 @@ pub struct SpriteBundle {
 
 #[derive(Component, Clone, Copy, Default, Debug)]
 pub struct Sprite {
-    pub(crate) texture_id: uuid::Uuid,
-    pub(crate) anchor: Anchor,
+    pub texture_id: uuid::Uuid,
+    pub anchor: Anchor,
     pub color: Color,
     pub texture_rect: Option<Rect>,
     pub custom_size: Option<Vec2>,

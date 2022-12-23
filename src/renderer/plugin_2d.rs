@@ -2,21 +2,21 @@ use std::sync::Arc;
 
 use bevy_ecs::system::Resource;
 use wgpu::{
-    include_wgsl, BindGroupLayout, FragmentState, FrontFace, PolygonMode, PrimitiveState,
-    PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, Sampler, VertexState,
+    include_wgsl, BindGroupLayout, BlendState, FragmentState, FrontFace, PolygonMode,
+    PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, Sampler,
+    VertexState,
 };
 
 use crate::{
     camera::{Camera, CameraBundle},
     internal_image::ImageBindGroups,
-    resource_utils::ResourceVec,
+    resources::utils::ResourceVec,
     App, CoreStage,
 };
 
 use super::{
-    sprite::Vertex,
     sprite_batching::{prepare_sprites_for_batching, SpriteBatch},
-    Renderer,
+    Renderer, Vertex,
 };
 
 #[derive(Resource)]
@@ -45,9 +45,9 @@ impl App {
 
             let default_sampler = {
                 renderer.device.create_sampler(&wgpu::SamplerDescriptor {
-                    mag_filter: wgpu::FilterMode::Linear,
-                    min_filter: wgpu::FilterMode::Linear,
-                    mipmap_filter: wgpu::FilterMode::Linear,
+                    mag_filter: wgpu::FilterMode::Nearest,
+                    min_filter: wgpu::FilterMode::Nearest,
+                    mipmap_filter: wgpu::FilterMode::Nearest,
                     ..Default::default()
                 })
             };
@@ -141,7 +141,7 @@ impl SpritePipeline {
         let binding = [Some(wgpu::ColorTargetState {
             // 4.
             format: renderer.config.format,
-            blend: Some(wgpu::BlendState::REPLACE),
+            blend: Some(BlendState::ALPHA_BLENDING),
             write_mask: wgpu::ColorWrites::ALL,
         })];
         let descriptor = RenderPipelineDescriptor {

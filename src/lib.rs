@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use bevy_ecs::{
     prelude::{Bundle, Events},
     schedule::{IntoSystemDescriptor, Schedule, Stage, StageLabel, SystemStage},
-    system::Resource,
+    system::{Local, Res, Resource},
     world::{FromWorld, World},
 };
 
-use events::{WindowCreated, WindowResized};
+use events::{KeyboardInput, WindowCreated, WindowResized};
 use image::load_from_memory;
 use renderer::{
     render_system,
@@ -15,11 +15,15 @@ use renderer::{
     Renderer,
 };
 
-use resource_utils::Asset;
+use resources::{
+    inputs::{input_system, Input},
+    utils::Asset,
+};
+use time::Time;
 use transform::transform_propagate_system;
 use window::{create_window, WindowDescriptor};
 use winit::{
-    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{self, ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
@@ -32,9 +36,15 @@ pub mod events;
 pub mod internal_image;
 pub mod rect;
 pub mod renderer;
-pub mod resource_utils;
+pub mod resources;
+pub mod texture_atlas;
+pub mod time;
 pub mod transform;
 pub mod window;
+
+pub use bevy_ecs;
+pub use glam;
+pub use winit;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, StageLabel)]
 pub enum CoreStage {
@@ -92,7 +102,24 @@ impl App {
             .add_stage(CoreStage::Render, SystemStage::parallel());
 
         self.add_event::<WindowResized>()
-            .add_event::<WindowCreated>();
+            .add_event::<WindowCreated>()
+            .add_event::<KeyboardInput>();
+    }
+
+    fn add_default_system_resources(mut self) -> Self {
+        self.add_default_stages();
+
+        self.world.insert_resource::<Asset<Texture>>(Asset::new());
+
+        self.init_resource::<Input<VirtualKeyCode>>();
+
+        self.init_resource::<Time>();
+
+        self.add_system_to_stage(render_system, CoreStage::Render)
+            .add_system_to_stage(transform_propagate_system, CoreStage::PostUpdate)
+            .add_system_to_stage(crate::camera::camera_system, CoreStage::PostUpdate)
+            .add_system_to_stage(input_system, CoreStage::PreUpdate)
+            .init_2d_renderer()
     }
 
     pub fn init_resource<R: Resource + FromWorld>(&mut self) -> &mut Self {
@@ -130,13 +157,7 @@ impl App {
             schedule: Schedule::default(),
         };
 
-        app.add_default_stages();
-
-        app.world.insert_resource::<Asset<Texture>>(Asset::new());
-
-        app.add_system_to_stage(render_system, CoreStage::Render)
-            .add_system_to_stage(transform_propagate_system, CoreStage::PostUpdate)
-            .add_system_to_stage(crate::camera::camera_system, CoreStage::PostUpdate)
+        app.add_default_system_resources()
     }
 
     pub fn load_texture(&mut self, bytes: &[u8]) -> uuid::Uuid {
@@ -201,16 +222,16 @@ impl App {
                     ref event,
                     window_id,
                 } if window_id == window.id() => match event {
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    } => *control_flow = ControlFlow::Exit,
+                    WindowEvent::CloseRequested {} => *control_flow = ControlFlow::Exit,
+
+                    WindowEvent::KeyboardInput { ref input, .. } => {
+                        if let Some(key_code) = input.virtual_keycode {
+                            self.world.send_event(KeyboardInput {
+                                state: input.state,
+                                key_code,
+                            });
+                        }
+                    }
                     WindowEvent::Resized(physical_size) => {
                         let mut renderer = self.world.get_resource_mut::<Renderer>().unwrap();
                         renderer.resize(*physical_size);
@@ -226,6 +247,7 @@ impl App {
                     }
                     _ => {}
                 },
+
                 Event::RedrawRequested(_) => {
                     self.update();
                 }
@@ -239,4 +261,21 @@ impl App {
             }
         });
     }
+}
+
+pub struct FrameCounterInfo {
+    fps: i32,
+    frame_count: i32,
+    frame_time: i32,
+}
+
+pub fn diagnostic_system(time: Res<Time>) {
+    let delta_seconds = time.raw_delta_seconds_f64();
+    if delta_seconds == 0.0 {
+        return;
+    }
+
+    dbg!(delta_seconds * 1000.0);
+
+    dbg!(1.0 / delta_seconds);
 }

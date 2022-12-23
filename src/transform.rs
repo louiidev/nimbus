@@ -265,6 +265,20 @@ impl Transform {
         }
     }
 
+    /// Creates a new [`Transform`], with `scale`. Translation will be 0 and rotation 0 on
+    /// all axes.
+    #[inline]
+    pub const fn from_single_scale(scale: f32) -> Self {
+        Transform {
+            scale: Vec3 {
+                x: scale,
+                y: scale,
+                z: scale,
+            },
+            ..Self::IDENTITY
+        }
+    }
+
     /// Updates and returns this [`Transform`] by rotating it so that its unit
     /// vector in the local negative `Z` direction is toward `target` and its
     /// unit vector in the local `Y` direction is toward `up`.

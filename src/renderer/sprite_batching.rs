@@ -12,15 +12,15 @@ use wgpu::{
 
 use crate::{
     camera::Camera,
-    resource_utils::{Asset, ResourceVec},
+    components::sprite::Sprite,
+    resources::utils::{Asset, ResourceVec},
     transform::GlobalTransform,
 };
 
 use super::{
     plugin_2d::{DefaultImageSampler, SpritePipeline},
-    sprite::{Sprite, Vertex},
     texture::Texture,
-    Renderer,
+    Renderer, Vertex,
 };
 
 const QUAD_INDICES: [u16; 6] = [0, 2, 3, 0, 1, 2];
@@ -72,6 +72,8 @@ impl TempSpriteBatch {
     pub fn update(&mut self, mut vertices: Vec<Vertex>, mut indices: Vec<u16>) {
         self.vertices.append(&mut vertices);
         self.indices.append(&mut indices);
+
+        dbg!(&self.indices);
     }
 }
 
@@ -88,7 +90,6 @@ pub fn prepare_sprites_for_batching(
 
     let projection = camera.projection_matrix();
 
-    // dbg!(projection);
     let view = global_transform.compute_matrix();
     let inverse_view = view.inverse();
     let view_projection = projection * inverse_view;
@@ -163,8 +164,12 @@ pub fn prepare_sprites_for_batching(
 
         if current_batch_texture_id == sprite.texture_id {
             let length = batches.len();
+
             let current = &mut batches[length - 1];
-            current.update(vertices, QUAD_INDICES.to_vec());
+            let vert_count = current.vertices.len() as u16;
+            let indices = QUAD_INDICES.map(|index| index + vert_count);
+
+            current.update(vertices, indices.to_vec());
         } else {
             current_batch_texture_id = sprite.texture_id;
             batches.push(TempSpriteBatch::new(

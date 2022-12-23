@@ -1,30 +1,16 @@
-use bevy_ecs::prelude::{Component, Query};
+use glam::{Vec2, Vec3};
 use guacamole::{
-    renderer::sprite::{Sprite, SpriteBundle},
+    bevy_ecs::prelude::Res,
+    components::sprite::{Sprite, SpriteBundle},
+    rect::Rect,
     transform::Transform,
+    winit::event::VirtualKeyCode,
     App,
 };
 
 fn main() {
-    #[derive(Component)]
-    struct Position {
-        x: f32,
-        y: f32,
-    }
-    #[derive(Component)]
-    struct Velocity {
-        x: f32,
-        y: f32,
-    }
-
-    fn movement(mut query: Query<(&mut Position, &Velocity)>) {
-        for (mut position, velocity) in query.iter_mut() {
-            position.x += velocity.x;
-            position.y += velocity.y;
-        }
-    }
-
     let image = include_bytes!("happy-tree.png");
+    let tilemap = include_bytes!("tilemap.png");
 
     let mut app = App::new(guacamole::window::WindowDescriptor {
         title: "app".to_string(),
@@ -32,15 +18,25 @@ fn main() {
         height: 720.,
         ..Default::default()
     })
-    .add_system(movement)
     .init_2d_renderer();
 
     let texture_id = app.load_texture(image);
+    let timemap_id = app.load_texture(tilemap);
 
     let sprite = Sprite::new(texture_id);
 
     let sprite_bundle = SpriteBundle {
-        sprite,
+        sprite: Sprite {
+            texture_id: timemap_id,
+            texture_rect: Some(Rect {
+                min: Vec2::new(0., 160.),
+                max: Vec2::new(16., 176.),
+            }),
+            custom_size: Some(Vec2::new(320., 320.)),
+            ..Default::default()
+        },
+        transform: Transform::from_translation(Vec3::new(0., 0., 0.)),
+
         ..Default::default()
     };
 

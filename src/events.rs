@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use bevy_ecs::system::Resource;
+use winit::event::VirtualKeyCode;
 
 pub trait Event: Send + Sync + 'static {}
 impl<T> Event for T where T: Send + Sync + 'static {}
@@ -19,6 +20,11 @@ pub struct WindowCreated {
     pub width: f32,
     /// The new logical height of the window.
     pub height: f32,
+}
+
+pub struct KeyboardInput {
+    pub state: winit::event::ElementState,
+    pub key_code: VirtualKeyCode,
 }
 
 #[derive(Debug, Resource)]

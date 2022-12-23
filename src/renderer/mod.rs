@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 
 use bevy_ecs::{
+    prelude::Component,
     schedule::{Stage, SystemStage},
     system::{Query, Res, ResMut, Resource},
     world::World,
@@ -11,7 +12,8 @@ use winit::window::Window;
 
 use crate::{
     camera::Camera,
-    resource_utils::{Asset, ResourceVec},
+    resources::utils::{Asset, ResourceVec},
+    time::Time,
     transform::Transform,
     App, CoreStage,
 };
@@ -20,7 +22,6 @@ use texture::Texture;
 
 use self::{
     plugin_2d::{DefaultImageSampler, Renderer2D, SpritePipeline},
-    sprite::Sprite,
     sprite_batching::{render_sprite_batches, SpriteBatch},
 };
 
@@ -33,9 +34,8 @@ pub struct Renderer {
     pub size: winit::dpi::PhysicalSize<u32>,
 }
 
-mod mesh;
-mod plugin_2d;
-pub mod sprite;
+pub(crate) mod mesh;
+pub(crate) mod plugin_2d;
 pub mod sprite_batching;
 pub mod texture;
 
@@ -45,7 +45,7 @@ impl Renderer {
 
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(wgpu::Backends::DX12);
+        let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -158,6 +158,7 @@ pub fn render_system(
     sprite_pipeline: Res<SpritePipeline>,
     sprite_batch: Res<ResourceVec<SpriteBatch>>,
     mut camera: Query<(&mut Camera)>,
+    mut time: ResMut<Time>,
 ) {
     let mut camera = camera.get_single_mut().unwrap();
 
@@ -210,4 +211,35 @@ pub fn render_system(
         .queue
         .submit(std::iter::once(command_encoder.finish()));
     output.present();
+
+    time.update()
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable, Component)]
+pub struct Vertex {
+    pub position: [f32; 3],
+    pub uv: [f32; 2],
+}
+
+impl Vertex {
+    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+        use std::mem;
+        wgpu::VertexBufferLayout {
+            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+            ],
+        }
+    }
 }
