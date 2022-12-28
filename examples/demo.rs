@@ -1,7 +1,7 @@
 use glam::{Vec2, Vec3};
 use guacamole::{
-    bevy_ecs::prelude::Res,
     components::sprite::{Sprite, SpriteBundle},
+    ecs::prelude::Res,
     rect::Rect,
     transform::Transform,
     winit::event::VirtualKeyCode,
@@ -17,8 +17,7 @@ fn main() {
         width: 1280.,
         height: 720.,
         ..Default::default()
-    })
-    .init_2d_renderer();
+    });
 
     let texture_id = app.load_texture(image);
     let timemap_id = app.load_texture(tilemap);

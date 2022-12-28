@@ -1,19 +1,12 @@
-use std::collections::HashMap;
-
 use bevy_ecs::{
     prelude::{Bundle, Events},
     schedule::{IntoSystemDescriptor, Schedule, Stage, StageLabel, SystemStage},
-    system::{Local, Res, Resource},
+    system::{Res, Resource},
     world::{FromWorld, World},
 };
 
 use events::{KeyboardInput, WindowCreated, WindowResized};
-use image::load_from_memory;
-use renderer::{
-    render_system,
-    texture::{self, Texture},
-    Renderer,
-};
+use renderer::{render_system, renderable::RenderCache, texture::Texture, Renderer};
 
 use resources::{
     inputs::{input_system, Input},
@@ -40,10 +33,11 @@ pub mod resources;
 pub mod texture_atlas;
 pub mod time;
 pub mod transform;
+pub mod ui;
 pub mod window;
 
-pub use bevy_ecs;
-pub use glam;
+pub use bevy_ecs as ecs;
+pub use glam as math;
 pub use winit;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, StageLabel)]
@@ -60,10 +54,12 @@ pub enum CoreStage {
     Last,
     PrepareRenderer,
     Render,
+    // Cleanup render cache
+    PostRender,
 }
 
 pub struct App {
-    world: World,
+    pub world: World,
     schedule: Schedule,
     event_loop: Option<EventLoop<()>>,
     window: Window,
@@ -99,7 +95,8 @@ impl App {
             .add_stage(CoreStage::PostUpdate, SystemStage::parallel())
             .add_stage(CoreStage::Last, SystemStage::parallel())
             .add_stage(CoreStage::PrepareRenderer, SystemStage::parallel())
-            .add_stage(CoreStage::Render, SystemStage::parallel());
+            .add_stage(CoreStage::Render, SystemStage::parallel())
+            .add_stage(CoreStage::PostRender, SystemStage::parallel());
 
         self.add_event::<WindowResized>()
             .add_event::<WindowCreated>()
@@ -114,6 +111,8 @@ impl App {
         self.init_resource::<Input<VirtualKeyCode>>();
 
         self.init_resource::<Time>();
+
+        self.init_resource::<RenderCache>();
 
         self.add_system_to_stage(render_system, CoreStage::Render)
             .add_system_to_stage(transform_propagate_system, CoreStage::PostUpdate)

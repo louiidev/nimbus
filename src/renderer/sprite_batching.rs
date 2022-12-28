@@ -19,6 +19,7 @@ use crate::{
 
 use super::{
     plugin_2d::{DefaultImageSampler, SpritePipeline},
+    renderable::{RenderCache, Renderable},
     texture::Texture,
     Renderer, Vertex,
 };
@@ -83,6 +84,7 @@ pub fn prepare_sprites_for_batching(
     sprite_assets: Res<Asset<Texture>>,
     sprite_pipeline: Res<SpritePipeline>,
     default_sampler: Res<DefaultImageSampler>,
+    mut render_cache: ResMut<RenderCache>,
     mut sprite_batch: ResMut<ResourceVec<SpriteBatch>>,
     mut camera: Query<(&mut Camera, &mut GlobalTransform), Without<Sprite>>,
 ) {
