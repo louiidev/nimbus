@@ -1,29 +1,34 @@
-use std::cell::RefCell;
-
 use bevy_ecs::{
     prelude::Component,
-    schedule::{Stage, SystemStage},
     system::{Query, Res, ResMut, Resource},
-    world::World,
 };
 
-use wgpu::{CommandEncoder, RenderPass};
+use glam::Vec2;
+use uuid::Uuid;
+use wgpu::{BindGroup, Buffer, Extent3d};
 use winit::window::Window;
 
-use crate::{
-    camera::Camera,
-    resources::utils::{Asset, ResourceVec},
-    time::Time,
-    transform::Transform,
-    App, CoreStage,
-};
+use crate::{camera::Camera, internal_image::Image, resources::utils::ResourceVec, time::Time};
 
 use texture::Texture;
 
-use self::{
-    plugin_2d::{DefaultImageSampler, Renderer2D, SpritePipeline},
-    sprite_batching::{render_sprite_batches, SpriteBatch},
-};
+use self::{plugin_2d::SpritePipeline, sprite_batching::render_sprite_batches, ui::render_ui};
+
+pub const QUAD_INDICES: [u16; 6] = [0, 2, 3, 0, 1, 2];
+
+pub const QUAD_VERTEX_POSITIONS: [Vec2; 4] = [
+    Vec2::new(-0.5, -0.5),
+    Vec2::new(0.5, -0.5),
+    Vec2::new(0.5, 0.5),
+    Vec2::new(-0.5, 0.5),
+];
+
+pub const QUAD_UVS: [Vec2; 4] = [
+    Vec2::new(0., 1.),
+    Vec2::new(1., 1.),
+    Vec2::new(1., 0.),
+    Vec2::new(0., 0.),
+];
 
 #[derive(Resource)]
 pub struct Renderer {
@@ -32,16 +37,18 @@ pub struct Renderer {
     pub queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
+    pub default_font_id: Uuid,
 }
 
 pub(crate) mod mesh;
 pub(crate) mod plugin_2d;
-pub mod renderable;
-pub mod sprite_batching;
+pub(crate) mod renderable;
+pub(crate) mod sprite_batching;
 pub mod texture;
+pub(crate) mod ui;
 
 impl Renderer {
-    pub async fn new(window: &Window) -> Self {
+    pub async fn new(window: &Window, default_font_id: uuid::Uuid) -> Self {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -91,54 +98,7 @@ impl Renderer {
             queue,
             config,
             size,
-        }
-    }
-
-    pub fn load_texture_data(&self, bytes: &[u8]) -> Texture {
-        println!("length: {}", bytes.len());
-        let image = image::load_from_memory(bytes).unwrap();
-
-        use image::GenericImageView;
-        let dimensions = image.dimensions();
-
-        let size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
-            depth_or_array_layers: 1,
-        };
-
-        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        });
-
-        self.queue.write_texture(
-            wgpu::ImageCopyTexture {
-                aspect: wgpu::TextureAspect::All,
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-            },
-            &image.to_rgb8(),
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
-                rows_per_image: std::num::NonZeroU32::new(dimensions.1),
-            },
-            size,
-        );
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        Texture {
-            texture,
-            view,
-            dimensions,
+            default_font_id,
         }
     }
 
@@ -157,8 +117,8 @@ impl Renderer {
 pub fn render_system(
     renderer: Res<Renderer>,
     sprite_pipeline: Res<SpritePipeline>,
-    sprite_batch: Res<ResourceVec<SpriteBatch>>,
-    mut camera: Query<(&mut Camera)>,
+    sprite_batch: Res<ResourceVec<RenderBatchItem>>,
+    mut camera: Query<&mut Camera>,
     mut time: ResMut<Time>,
 ) {
     let mut camera = camera.get_single_mut().unwrap();
@@ -201,11 +161,13 @@ pub fn render_system(
             depth_stencil_attachment: None,
         });
         render_sprite_batches(
-            &sprite_batch.value,
+            &sprite_batch.values,
             &mut render_pass,
             &sprite_pipeline,
             camera_bind_group,
         );
+
+        // render_ui(&mut render_pass);
     }
 
     renderer
@@ -221,6 +183,7 @@ pub fn render_system(
 pub struct Vertex {
     pub position: [f32; 3],
     pub uv: [f32; 2],
+    pub color: [f32; 4],
 }
 
 impl Vertex {
@@ -240,7 +203,42 @@ impl Vertex {
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x2,
                 },
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 2]>() + std::mem::size_of::<[f32; 3]>())
+                        as wgpu::BufferAddress,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
             ],
         }
+    }
+}
+
+#[derive(Resource, Debug)]
+pub struct RenderBatchItem {
+    vertex_buffer: Buffer,
+    index_buffer: Buffer,
+    texture_bind_group: BindGroup,
+    indices_len: u32,
+}
+
+pub struct RenderBatchMeta<V> {
+    pub(crate) texture_id: uuid::Uuid,
+    pub(crate) vertices: Vec<V>,
+    pub(crate) indices: Vec<u16>,
+}
+
+impl<V> RenderBatchMeta<V> {
+    pub fn new(texture_id: uuid::Uuid, vertices: Vec<V>, indices: Vec<u16>) -> Self {
+        Self {
+            texture_id,
+            vertices,
+            indices,
+        }
+    }
+
+    pub fn update(&mut self, mut vertices: Vec<V>, mut indices: Vec<u16>) {
+        self.vertices.append(&mut vertices);
+        self.indices.append(&mut indices);
     }
 }

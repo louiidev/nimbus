@@ -11,9 +11,9 @@ use wgpu::{
 };
 
 use crate::{
-    camera::Camera,
+    camera::{Camera, CameraUniform},
     components::sprite::Sprite,
-    resources::utils::{Asset, ResourceVec},
+    resources::utils::{Assets, ResourceVec},
     transform::GlobalTransform,
 };
 
@@ -21,71 +21,17 @@ use super::{
     plugin_2d::{DefaultImageSampler, SpritePipeline},
     renderable::{RenderCache, Renderable},
     texture::Texture,
-    Renderer, Vertex,
+    RenderBatchItem, RenderBatchMeta, Renderer, Vertex, QUAD_INDICES, QUAD_UVS,
+    QUAD_VERTEX_POSITIONS,
 };
-
-const QUAD_INDICES: [u16; 6] = [0, 2, 3, 0, 1, 2];
-
-const QUAD_VERTEX_POSITIONS: [Vec2; 4] = [
-    Vec2::new(-0.5, -0.5),
-    Vec2::new(0.5, -0.5),
-    Vec2::new(0.5, 0.5),
-    Vec2::new(-0.5, 0.5),
-];
-
-const QUAD_UVS: [Vec2; 4] = [
-    Vec2::new(0., 1.),
-    Vec2::new(1., 1.),
-    Vec2::new(1., 0.),
-    Vec2::new(0., 0.),
-];
-
-#[repr(C)]
-// This is so we can store this in a buffer
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct CameraUniform {
-    view_proj: [[f32; 4]; 4],
-}
-
-#[derive(Resource)]
-pub struct SpriteBatch {
-    vertex_buffer: Buffer,
-    index_buffer: Buffer,
-    texture_bind_group: BindGroup,
-    indices_len: u32,
-}
-
-pub struct TempSpriteBatch {
-    texture_id: uuid::Uuid,
-    vertices: Vec<Vertex>,
-    indices: Vec<u16>,
-}
-
-impl TempSpriteBatch {
-    pub fn new(texture_id: uuid::Uuid, vertices: Vec<Vertex>, indices: Vec<u16>) -> Self {
-        Self {
-            texture_id,
-            vertices,
-            indices,
-        }
-    }
-
-    pub fn update(&mut self, mut vertices: Vec<Vertex>, mut indices: Vec<u16>) {
-        self.vertices.append(&mut vertices);
-        self.indices.append(&mut indices);
-
-        dbg!(&self.indices);
-    }
-}
 
 pub fn prepare_sprites_for_batching(
     sprite_query: Query<(&Sprite, &mut GlobalTransform), Without<Camera>>,
     renderer: Res<Renderer>,
-    sprite_assets: Res<Asset<Texture>>,
+    sprite_assets: Res<Assets<Texture>>,
     sprite_pipeline: Res<SpritePipeline>,
     default_sampler: Res<DefaultImageSampler>,
-    mut render_cache: ResMut<RenderCache>,
-    mut sprite_batch: ResMut<ResourceVec<SpriteBatch>>,
+    mut sprite_batch: ResMut<ResourceVec<RenderBatchItem>>,
     mut camera: Query<(&mut Camera, &mut GlobalTransform), Without<Sprite>>,
 ) {
     let (mut camera, global_transform) = camera.get_single_mut().unwrap();
@@ -123,7 +69,7 @@ pub fn prepare_sprites_for_batching(
 
     let mut current_batch_texture_id = uuid::Uuid::new_v4();
 
-    let mut batches: Vec<TempSpriteBatch> = Vec::new();
+    let mut batches: Vec<RenderBatchMeta<Vertex>> = Vec::new();
 
     for (sprite, transform) in sprite_query.iter() {
         let mut uvs = QUAD_UVS;
@@ -161,6 +107,7 @@ pub fn prepare_sprites_for_batching(
             vertices.push(Vertex {
                 position: positions[i],
                 uv: uvs[i].into(),
+                color: sprite.color.into(),
             });
         }
 
@@ -174,7 +121,7 @@ pub fn prepare_sprites_for_batching(
             current.update(vertices, indices.to_vec());
         } else {
             current_batch_texture_id = sprite.texture_id;
-            batches.push(TempSpriteBatch::new(
+            batches.push(RenderBatchMeta::new(
                 sprite.texture_id,
                 vertices,
                 QUAD_INDICES.to_vec(),
@@ -182,7 +129,7 @@ pub fn prepare_sprites_for_batching(
         }
     }
 
-    let sprite_batches: Vec<SpriteBatch> = batches
+    let sprite_batches: Vec<RenderBatchItem> = batches
         .iter()
         .map(|batch| {
             let vertex_buffer =
@@ -223,7 +170,7 @@ pub fn prepare_sprites_for_batching(
                         label: Some("diffuse_bind_group"),
                     });
 
-            SpriteBatch {
+            RenderBatchItem {
                 vertex_buffer,
                 index_buffer,
                 texture_bind_group,
@@ -232,18 +179,19 @@ pub fn prepare_sprites_for_batching(
         })
         .collect();
 
-    sprite_batch.value = sprite_batches;
+    sprite_batch.values = sprite_batches;
 }
 
 pub fn render_sprite_batches<'a>(
-    sprite_batch: &'a Vec<SpriteBatch>,
+    sprite_batch: &'a Vec<RenderBatchItem>,
     render_pass: &mut RenderPass<'a>,
     sprite_pipeline: &'a SpritePipeline,
     camera_bind_group: &'a BindGroup,
 ) {
+    render_pass.set_pipeline(&sprite_pipeline.render_pipeline);
+    render_pass.set_bind_group(0, camera_bind_group, &[]);
+
     for batch in sprite_batch {
-        render_pass.set_pipeline(&sprite_pipeline.render_pipeline);
-        render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.set_bind_group(1, &batch.texture_bind_group, &[]);
         render_pass.set_vertex_buffer(0, batch.vertex_buffer.slice(..));
         render_pass.set_index_buffer(batch.index_buffer.slice(..), wgpu::IndexFormat::Uint16);

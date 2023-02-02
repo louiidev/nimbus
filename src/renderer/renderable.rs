@@ -19,10 +19,16 @@ pub struct RenderCache {
     pub buffers: HashMap<Uuid, Buffer>,
 }
 
+impl RenderCache {
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+    }
+}
+
 pub fn render_generic<'a>(
     render_batch: &'a mut Vec<Renderable>,
     render_pass: &mut RenderPass<'a>,
-    render_cache: &'a RenderCache,
+    render_cache: &'a mut RenderCache,
 ) {
     for batch in render_batch.iter_mut() {
         let pipeline = render_cache.pipelines.get(&batch.pipeline_id).unwrap();

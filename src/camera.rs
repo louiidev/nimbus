@@ -220,8 +220,6 @@ impl OrthographicProjection {
                 self.bottom = viewport_height;
             }
         }
-
-        dbg!(self);
     }
 
     fn far(&self) -> f32 {
@@ -243,6 +241,13 @@ impl Default for OrthographicProjection {
             scale: 1.0,
         }
     }
+}
+
+#[repr(C)]
+// This is so we can store this in a buffer
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CameraUniform {
+    pub view_proj: [[f32; 4]; 4],
 }
 
 #[derive(Component, Debug, Clone)]

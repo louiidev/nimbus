@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use image::GenericImageView;
+use crate::internal_image::Image;
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -15,24 +15,17 @@ impl Texture {
         bytes: &[u8],
         label: &str,
     ) -> Self {
-        let img = image::load_from_memory(bytes).unwrap();
-        Self::from_image(device, queue, &img, Some(label))
+        let image = Image::from_bytes(&bytes);
+        Self::from_image(device, queue, &image, Some(label))
     }
 
     pub fn from_image(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        img: &image::DynamicImage,
+        image: &Image,
         label: Option<&str>,
     ) -> Self {
-        let rgba = img.to_rgba8();
-        let dimensions = img.dimensions();
-
-        let size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
-            depth_or_array_layers: 1,
-        };
+        let size = image.texture_descriptor.size;
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label,
             size,
@@ -50,11 +43,11 @@ impl Texture {
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
-            &rgba,
+            &image.data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(4 * dimensions.0),
-                rows_per_image: NonZeroU32::new(dimensions.1),
+                bytes_per_row: NonZeroU32::new(4 * image.texture_descriptor.size.width),
+                rows_per_image: NonZeroU32::new(image.texture_descriptor.size.height),
             },
             size,
         );
@@ -64,7 +57,10 @@ impl Texture {
         Self {
             texture,
             view,
-            dimensions,
+            dimensions: (
+                image.texture_descriptor.size.width,
+                image.texture_descriptor.size.height,
+            ),
         }
     }
 }

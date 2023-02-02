@@ -6,20 +6,28 @@ use bevy_ecs::{
 };
 
 use events::{KeyboardInput, WindowCreated, WindowResized};
+use font::FontAtlasSet;
+use internal_image::{Image, DEFAULT_TEXTURE_FORMAT};
 use renderer::{render_system, renderable::RenderCache, texture::Texture, Renderer};
 
 use resources::{
     inputs::{input_system, Input},
-    utils::Asset,
+    utils::Assets,
 };
+use texture_atlas::TextureAtlas;
 use time::Time;
 use transform::transform_propagate_system;
+use ui::UiHandler;
+use wgpu::{Extent3d, TextureDimension};
 use window::{create_window, WindowDescriptor};
 use winit::{
     event::{ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{self, ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
+
+pub const DEFAULT_TEXTURE_ID: uuid::Uuid =
+    uuid::Uuid::from_u64_pair(13148262314052771789, 13148262314052771789);
 
 pub mod camera;
 pub mod color;
@@ -35,6 +43,10 @@ pub mod time;
 pub mod transform;
 pub mod ui;
 pub mod window;
+
+pub mod font;
+pub mod loaders;
+pub mod utils;
 
 pub use bevy_ecs as ecs;
 pub use glam as math;
@@ -69,7 +81,8 @@ impl Default for App {
     fn default() -> Self {
         let mut world = World::default();
         let (window, event_loop) = create_window(WindowDescriptor::default());
-        let renderer = pollster::block_on(Renderer::new(&window));
+        let default_font_id = uuid::Uuid::new_v4();
+        let renderer = pollster::block_on(Renderer::new(&window, default_font_id));
         world.insert_resource(renderer);
         let window_size = window.inner_size();
         world.send_event(WindowCreated {
@@ -103,10 +116,25 @@ impl App {
             .add_event::<KeyboardInput>();
     }
 
+    fn add_assets(mut self) -> Self {
+        self.add_asset::<Texture>();
+        self.add_asset::<TextureAtlas>();
+        self.add_asset::<Image>();
+        self.add_asset::<FontAtlasSet>();
+
+        let image = Image::new_fill(
+            Extent3d::default(),
+            TextureDimension::D2,
+            &[255u8; 4],
+            DEFAULT_TEXTURE_FORMAT,
+        );
+        self.load_texture_with_id_image(image, DEFAULT_TEXTURE_ID);
+
+        self
+    }
+
     fn add_default_system_resources(mut self) -> Self {
         self.add_default_stages();
-
-        self.world.insert_resource::<Asset<Texture>>(Asset::new());
 
         self.init_resource::<Input<VirtualKeyCode>>();
 
@@ -119,11 +147,16 @@ impl App {
             .add_system_to_stage(crate::camera::camera_system, CoreStage::PostUpdate)
             .add_system_to_stage(input_system, CoreStage::PreUpdate)
             .init_2d_renderer()
+            .init_ui_renderer()
     }
 
     pub fn init_resource<R: Resource + FromWorld>(&mut self) -> &mut Self {
         self.world.init_resource::<R>();
         self
+    }
+
+    pub fn add_asset<T: Send + Sync + 'static>(&mut self) {
+        self.world.insert_resource::<Assets<T>>(Assets::new());
     }
 
     pub fn add_event<T>(&mut self) -> &mut Self
@@ -141,7 +174,9 @@ impl App {
     pub fn new(window_descriptor: WindowDescriptor) -> Self {
         let (window, event_loop) = create_window(window_descriptor);
         let mut world = World::default();
-        let renderer = pollster::block_on(Renderer::new(&window));
+        let default_font_id = uuid::Uuid::new_v4();
+        let renderer = pollster::block_on(Renderer::new(&window, default_font_id));
+        world.insert_resource(UiHandler::new());
         world.insert_resource(renderer);
         let window_size = window.inner_size();
         world.send_event(WindowCreated {
@@ -156,21 +191,7 @@ impl App {
             schedule: Schedule::default(),
         };
 
-        app.add_default_system_resources()
-    }
-
-    pub fn load_texture(&mut self, bytes: &[u8]) -> uuid::Uuid {
-        let renderer = self.world.get_resource::<Renderer>().unwrap();
-
-        let texture = Texture::from_bytes(&renderer.device, &renderer.queue, bytes, "None");
-
-        let texture_id = uuid::Uuid::new_v4();
-
-        let mut textures = self.world.get_resource_mut::<Asset<Texture>>().unwrap();
-
-        textures.data.insert(texture_id, texture);
-
-        texture_id
+        app.add_default_system_resources().add_assets()
     }
 
     pub fn spawn<T: Bundle>(mut self, component: T) -> Self {

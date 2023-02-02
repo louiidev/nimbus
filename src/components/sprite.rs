@@ -5,6 +5,7 @@ use crate::{
     rect::Rect,
     renderer::mesh::Mesh,
     transform::{GlobalTransform, Transform},
+    DEFAULT_TEXTURE_ID,
 };
 
 use bevy_ecs::prelude::{Bundle, Component};
@@ -17,13 +18,25 @@ pub struct SpriteBundle {
     pub global_transform: GlobalTransform,
 }
 
-#[derive(Component, Clone, Copy, Default, Debug)]
+#[derive(Component, Clone, Copy, Debug)]
 pub struct Sprite {
     pub texture_id: uuid::Uuid,
     pub anchor: Anchor,
     pub color: Color,
     pub texture_rect: Option<Rect>,
     pub custom_size: Option<Vec2>,
+}
+
+impl Default for Sprite {
+    fn default() -> Self {
+        Self {
+            texture_id: DEFAULT_TEXTURE_ID,
+            anchor: Anchor::default(),
+            color: Color::WHITE,
+            texture_rect: None,
+            custom_size: None,
+        }
+    }
 }
 
 impl Sprite {

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, io::Read, sync::Arc};
 
 use bevy_ecs::system::Resource;
 use glam::Vec2;
@@ -21,7 +21,8 @@ pub struct Image {
 impl Default for Image {
     fn default() -> Self {
         let format = DEFAULT_TEXTURE_FORMAT;
-        let data = vec![255; 1];
+        let data = vec![255; format.describe().block_size as usize];
+
         Image {
             data,
             texture_descriptor: wgpu::TextureDescriptor {
@@ -55,6 +56,22 @@ impl Volume for Extent3d {
 }
 
 impl Image {
+    pub fn new(
+        size: Extent3d,
+        dimension: TextureDimension,
+        data: Vec<u8>,
+        format: TextureFormat,
+    ) -> Self {
+        let mut image = Self {
+            data,
+            ..Default::default()
+        };
+        image.texture_descriptor.dimension = dimension;
+        image.texture_descriptor.size = size;
+        image.texture_descriptor.format = format;
+        image
+    }
+
     pub fn new_fill(
         size: Extent3d,
         dimension: TextureDimension,
@@ -65,6 +82,12 @@ impl Image {
         value.texture_descriptor.format = format;
         value.texture_descriptor.dimension = dimension;
         value.resize(size);
+
+        debug_assert_eq!(
+            pixel.len() % format.describe().block_size as usize,
+            0,
+            "Must not have incomplete pixel data."
+        );
 
         debug_assert!(
             pixel.len() <= value.data.len(),
@@ -79,8 +102,37 @@ impl Image {
 
     pub fn resize(&mut self, size: Extent3d) {
         self.texture_descriptor.size = size;
-        self.data.resize(size.volume(), 0);
+        self.data.resize(
+            size.volume() * self.texture_descriptor.format.describe().block_size as usize,
+            0,
+        );
     }
+
+    pub fn from_bytes(buffer: &[u8]) -> Image {
+        let image = image::load_from_memory(buffer).unwrap();
+        let rgba = image.to_rgba8();
+        let size = Extent3d {
+            width: rgba.width(),
+            height: rgba.height(),
+            depth_or_array_layers: 1,
+        };
+        Image::new(
+            size,
+            TextureDimension::D2,
+            rgba.into_raw(),
+            DEFAULT_TEXTURE_FORMAT,
+        )
+    }
+}
+
+#[test]
+fn white_image() {
+    let image = Image::new_fill(
+        Extent3d::default(),
+        TextureDimension::D2,
+        &[255u8; 4],
+        DEFAULT_TEXTURE_FORMAT,
+    );
 }
 
 #[derive(Debug)]

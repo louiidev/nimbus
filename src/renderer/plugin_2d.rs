@@ -8,14 +8,12 @@ use wgpu::{
 };
 
 use crate::{
-    camera::{Camera, CameraBundle},
-    internal_image::ImageBindGroups,
-    resources::utils::ResourceVec,
-    App, CoreStage,
+    camera::CameraBundle, internal_image::ImageBindGroups, resources::utils::ResourceVec, App,
+    CoreStage,
 };
 
 use super::{
-    sprite_batching::{prepare_sprites_for_batching, SpriteBatch},
+    sprite_batching::prepare_sprites_for_batching, ui::prepare_ui_for_batching, RenderBatchItem,
     Renderer, Vertex,
 };
 
@@ -34,41 +32,31 @@ impl App {
 
         self.world.insert_resource(Renderer2D);
 
-        self.setup_2d_renderer();
+        let renderer = self.world.get_resource::<Renderer>().unwrap();
+
+        let default_sampler = {
+            renderer.device.create_sampler(&wgpu::SamplerDescriptor {
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            })
+        };
+        self.world.insert_resource(SpritePipeline::new(renderer));
+
+        self.world
+            .insert_resource(DefaultImageSampler(Arc::new(default_sampler)));
+        self.schedule
+            .add_system_to_stage(CoreStage::PrepareRenderer, prepare_sprites_for_batching);
+
+        let sprite_batch_resource: Vec<RenderBatchItem> = Vec::new();
+
+        self.world
+            .insert_resource(ResourceVec::new(sprite_batch_resource));
+
+        self.world.spawn(CameraBundle::default());
 
         self
-    }
-
-    pub fn setup_2d_renderer(&mut self) {
-        if self.is_2d_enabled() {
-            let renderer = self.world.get_resource::<Renderer>().unwrap();
-
-            let default_sampler = {
-                renderer.device.create_sampler(&wgpu::SamplerDescriptor {
-                    mag_filter: wgpu::FilterMode::Nearest,
-                    min_filter: wgpu::FilterMode::Nearest,
-                    mipmap_filter: wgpu::FilterMode::Nearest,
-                    ..Default::default()
-                })
-            };
-            self.world.insert_resource(SpritePipeline::new(renderer));
-
-            self.world
-                .insert_resource(DefaultImageSampler(Arc::new(default_sampler)));
-            self.schedule
-                .add_system_to_stage(CoreStage::PrepareRenderer, prepare_sprites_for_batching);
-
-            let sprite_batch_resource: Vec<SpriteBatch> = Vec::new();
-
-            self.world
-                .insert_resource(ResourceVec::new(sprite_batch_resource));
-
-            self.world.spawn(CameraBundle::default());
-        }
-    }
-
-    pub fn is_2d_enabled(&self) -> bool {
-        self.world.contains_resource::<Renderer2D>()
     }
 }
 

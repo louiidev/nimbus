@@ -7,14 +7,10 @@ use uuid::Uuid;
 use wgpu::BufferUsages;
 use wgpu::Device;
 use wgpu::IndexFormat;
-use wgpu::PrimitiveTopology;
-use wgpu::RenderPipeline;
-use wgpu::TextureFormat;
 use wgpu::VertexFormat;
 
 use glam::Vec2;
 use glam::Vec3;
-use wgpu::include_wgsl;
 use wgpu::util::BufferInitDescriptor;
 use wgpu::util::DeviceExt;
 

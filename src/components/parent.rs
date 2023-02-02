@@ -1,7 +1,6 @@
 use bevy_ecs::{
     component::Component,
     entity::{Entity, EntityMap, MapEntities, MapEntitiesError},
-    reflect::{ReflectComponent, ReflectMapEntities},
     world::{FromWorld, World},
 };
 
