@@ -2,14 +2,11 @@ use std::sync::Arc;
 
 use bevy_ecs::{
     query::Without,
-    system::{Query, Res, ResMut, Resource},
+    system::{Query, Res, ResMut},
 };
 use glam::Vec2;
 use hashbrown::HashMap;
-use wgpu::{
-    include_wgsl, util::DeviceExt, BindGroup, BindGroupLayout, Buffer, FragmentState, FrontFace,
-    PolygonMode, PrimitiveState, PrimitiveTopology, RenderPass, RenderPipeline,
-};
+use wgpu::{util::DeviceExt, RenderPass};
 
 use crate::{
     camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID},
@@ -20,7 +17,6 @@ use crate::{
 
 use super::{
     plugin_2d::{DefaultImageSampler, SpritePipeline},
-    renderable::{RenderCache, Renderable},
     texture::Texture,
     RenderBatchItem, RenderBatchMeta, Renderer, Vertex, QUAD_INDICES, QUAD_UVS,
     QUAD_VERTEX_POSITIONS,
@@ -202,7 +198,7 @@ pub fn render_sprite_batches<'a>(
     for batch in sprite_batch {
         render_pass.set_bind_group(
             0,
-            &camera_bind_group.get(&batch.camera_bind_group_id).unwrap(),
+            camera_bind_group.get(&batch.camera_bind_group_id).unwrap(),
             &[],
         );
         render_pass.set_bind_group(1, &batch.texture_bind_group, &[]);

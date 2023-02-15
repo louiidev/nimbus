@@ -1,5 +1,3 @@
-use std::default::{self};
-
 use glam::Vec2;
 use log::warn;
 use wgpu::PresentMode;

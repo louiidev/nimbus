@@ -1,9 +1,6 @@
-use std::default;
-
 use crate::{
     color::Color,
     rect::Rect,
-    renderer::mesh::Mesh,
     transform::{GlobalTransform, Transform},
     DEFAULT_TEXTURE_ID,
 };

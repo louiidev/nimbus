@@ -1,9 +1,8 @@
 use std::{ops::Range, sync::Arc};
 
 use bevy_ecs::{
-    bundle,
     prelude::{Bundle, Component, EventReader},
-    system::{Query, Res, ResMut, Resource},
+    system::Query,
 };
 use glam::{Mat4, UVec2, Vec2};
 use hashbrown::HashMap;

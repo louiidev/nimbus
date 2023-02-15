@@ -18,7 +18,7 @@ impl<T> Assets<T> {
     }
 
     pub fn get(&self, id: &uuid::Uuid) -> Option<&T> {
-        self.get(id)
+        self.data.get(id)
     }
 
     pub fn insert(&mut self, id: uuid::Uuid, value: T) -> Option<T> {

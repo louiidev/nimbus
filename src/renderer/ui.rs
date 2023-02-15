@@ -1,13 +1,8 @@
 use std::sync::Arc;
 
-use bevy_ecs::{
-    query::Without,
-    system::{Query, Res, ResMut},
-};
+use bevy_ecs::system::{Query, Res, ResMut};
 use glam::Vec2;
-use wgpu::{
-    util::DeviceExt, Extent3d, RenderPass, RenderPipeline, TextureDimension, TextureFormat,
-};
+use wgpu::util::DeviceExt;
 
 use crate::{
     camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID},

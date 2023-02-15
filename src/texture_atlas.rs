@@ -1,9 +1,6 @@
 use glam::{IVec2, Vec2};
-use hashbrown::HashMap;
 
-use crate::{
-    components::sprite::Sprite, internal_image::Image, rect::Rect, resources::utils::Assets,
-};
+use crate::{internal_image::Image, rect::Rect, resources::utils::Assets};
 
 pub struct TextureAtlas {
     texture_id: uuid::Uuid,

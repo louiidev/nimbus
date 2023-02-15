@@ -6,7 +6,7 @@ use guacamole::{
     rect::Rect,
     transform::Transform,
     ui::{button::Button, UiHandler},
-    App, DEFAULT_TEXTURE_ID,
+    App,
 };
 
 fn test_drawing_ui(mut ui_handler: ResMut<UiHandler>) {
@@ -30,7 +30,6 @@ fn test_drawing_ui(mut ui_handler: ResMut<UiHandler>) {
 }
 
 fn main() {
-    let image = include_bytes!("happy-tree.png");
     let tilemap = include_bytes!("tilemap.png");
 
     let mut app = App::new(guacamole::window::WindowDescriptor {
@@ -47,7 +46,7 @@ fn main() {
 
     let sprite_bundle = SpriteBundle {
         sprite: Sprite {
-            texture_id: DEFAULT_TEXTURE_ID,
+            texture_id: timemap_id,
             texture_rect: Some(Rect {
                 min: Vec2::new(0., 156.),
                 max: Vec2::new(16., 170.),

@@ -1,8 +1,8 @@
-use std::{collections::HashMap, io::Read, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use bevy_ecs::system::Resource;
 use glam::Vec2;
-use wgpu::{Extent3d, Sampler, Texture, TextureDimension, TextureFormat, TextureView};
+use wgpu::{Extent3d, Texture, TextureDimension, TextureFormat, TextureView};
 
 #[derive(Resource, Default)]
 pub struct ImageBindGroups {

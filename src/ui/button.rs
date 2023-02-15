@@ -1,12 +1,9 @@
 use glam::Vec2;
-use winit::event::MouseButton;
 
 use crate::{
     color::Color,
     renderer::{RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
-    resources::inputs::{Input, InputController},
     transform::Transform,
-    utils::collision::rect_contains_point,
     DEFAULT_TEXTURE_ID,
 };
 

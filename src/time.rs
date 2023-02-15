@@ -11,9 +11,6 @@ pub fn now() -> f64 {
 
 use std::time::Duration;
 
-use bevy_ecs::system::Local;
-use bevy_ecs::system::Res;
-use bevy_ecs::system::ResMut;
 use bevy_ecs::system::Resource;
 
 // #[derive(Resource)]

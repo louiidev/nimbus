@@ -119,7 +119,7 @@ pub fn render_system(
     mut camera: Query<&mut Camera>,
     mut time: ResMut<Time>,
 ) {
-    let mut camera = camera.get_single_mut().unwrap();
+    let camera = camera.get_single_mut().unwrap();
 
     let output = renderer
         .surface

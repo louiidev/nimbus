@@ -15,7 +15,7 @@ impl Texture {
         bytes: &[u8],
         label: &str,
     ) -> Self {
-        let image = Image::from_bytes(&bytes);
+        let image = Image::from_bytes(bytes);
         Self::from_image(device, queue, &image, Some(label))
     }
 
