@@ -1,14 +1,11 @@
-use bevy_ecs::system::{ResMut, Resource};
+use bevy_ecs::system::ResMut;
 use glam::{Vec2, Vec3};
 use guacamole::{
     color::Color,
     components::sprite::{Sprite, SpriteBundle},
-    ecs::prelude::Res,
     rect::Rect,
-    texture_atlas::TextureAtlas,
     transform::Transform,
-    ui::{button::Button, Layout, UiHandler},
-    winit::event::VirtualKeyCode,
+    ui::{button::Button, UiHandler},
     App, DEFAULT_TEXTURE_ID,
 };
 
@@ -20,8 +17,15 @@ fn test_drawing_ui(mut ui_handler: ResMut<UiHandler>) {
                 text: "hello",
                 ..Default::default()
             })
-            .is_clicked()
-        {}
+            .clicked
+        {
+            dbg!("PRESSED");
+        }
+
+        ui.button(Button {
+            text: "hello",
+            ..Default::default()
+        });
     });
 }
 
@@ -52,13 +56,13 @@ fn main() {
             color: Color::WHITE,
             ..Default::default()
         },
-        transform: Transform::from_translation(Vec3::new(0., 0., 0.)),
+        transform: Transform::from_translation(Vec3::new(250., 250., 0.)),
 
         ..Default::default()
     };
 
     app.add_system(test_drawing_ui)
         .spawn_bundle(sprite_bundle)
-        .add_system(test_drawing_ui)
+        // .add_system(test_drawing_ui)
         .run();
 }

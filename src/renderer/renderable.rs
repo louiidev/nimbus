@@ -33,10 +33,10 @@ pub fn render_generic<'a>(
     for batch in render_batch.iter_mut() {
         let pipeline = render_cache.pipelines.get(&batch.pipeline_id).unwrap();
 
-        render_pass.set_pipeline(&pipeline);
+        render_pass.set_pipeline(pipeline);
         for (index, bind_group_id) in batch.bindgroup_ids.iter().enumerate() {
-            let bind_group = render_cache.bind_groups.get(&bind_group_id).unwrap();
-            render_pass.set_bind_group(index as u32, &bind_group, &[]);
+            let bind_group = render_cache.bind_groups.get(bind_group_id).unwrap();
+            render_pass.set_bind_group(index as u32, bind_group, &[]);
         }
 
         let vertex_buffer = render_cache.buffers.get(&batch.vertex_buffer_id).unwrap();

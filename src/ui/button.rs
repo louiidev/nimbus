@@ -1,23 +1,104 @@
-use crate::color::Color;
+use glam::Vec2;
+use winit::event::MouseButton;
 
-use super::Widget;
+use crate::{
+    color::Color,
+    renderer::{RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
+    resources::inputs::{Input, InputController},
+    transform::Transform,
+    utils::collision::rect_contains_point,
+    DEFAULT_TEXTURE_ID,
+};
+
+use super::{id::Id, widget::WidgetResponse, UiHandler, UiVertex, Widget};
 
 #[derive(Default)]
 pub struct Button<'a> {
     pub text: &'a str,
     pub theme: ButtonTheme,
+    pub active: bool,
+    pub hover: bool,
+    pub position: Vec2,
+    pub id: Id,
 }
 
 impl<'a> Widget for Button<'a> {
-    fn get_size(&self) -> glam::Vec2 {
-        todo!()
+    fn ui(&mut self, ui: &mut UiHandler) -> super::widget::WidgetResponse {
+        if self.id == Id::default() {
+            self.id = ui.generate_id();
+        }
+
+        self.position = ui.get_next_widget_position();
+        let size = Vec2::new(150., 50.);
+
+        // Need to cache last active to see if we should apply click
+        let last_frame_active_id = ui.active_id;
+
+        ui.check_widget_interactions(self.id, size, self.position);
+
+        self.hover = ui.hover_id == Some(self.id);
+
+        let clicked =
+            last_frame_active_id == Some(self.id) && ui.active_id != Some(self.id) && self.hover;
+
+        self.active = ui.active_id == Some(self.id);
+
+        let last_index = ui.current_layout.len() - 1;
+
+        let layout = ui
+            .current_layout
+            .get_mut(last_index)
+            .expect("Button needs to be inside layout to render");
+
+        layout.ui_meta.push(self.get_render_meta());
+
+        layout.push_widget(size);
+
+        WidgetResponse { clicked }
     }
 
-    fn get_render_meta(
-        &self,
-        position_to_render: glam::Vec2,
-    ) -> crate::renderer::RenderBatchMeta<super::UiVertex> {
-        todo!()
+    fn get_render_meta(&self) -> RenderBatchMeta<UiVertex> {
+        let button_size = Vec2::new(150., 50.);
+
+        let transform = Transform::from_xyz(self.position.x, self.position.y, 1.0);
+
+        let mut vertices = Vec::new();
+
+        let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
+            (transform // offset the center point so it renders top left
+                .transform_point(((quad_pos - Vec2::new(-0.5, -0.5) ) * button_size).extend(1.)))
+            .into()
+        });
+
+        let background_color = if self.active {
+            Color::rgb(
+                self.theme.background_color.red - 0.2,
+                self.theme.background_color.green - 0.2,
+                self.theme.background_color.blue - 0.2,
+            )
+        } else if self.hover {
+            Color::rgb(
+                self.theme.background_color.red - 0.1,
+                self.theme.background_color.green - 0.1,
+                self.theme.background_color.blue - 0.1,
+            )
+        } else {
+            self.theme.background_color
+        };
+
+        for i in 0..QUAD_VERTEX_POSITIONS.len() {
+            vertices.push(UiVertex {
+                position: positions[i],
+                tex_coords: QUAD_UVS[i].into(),
+                color: background_color.as_rgba_f32(),
+            });
+        }
+
+        RenderBatchMeta {
+            texture_id: DEFAULT_TEXTURE_ID,
+            vertices,
+            indices: QUAD_INDICES.to_vec(),
+        }
     }
 }
 pub struct ButtonState {
@@ -31,17 +112,26 @@ impl ButtonState {
 }
 
 pub struct ButtonTheme {
-    text_color: Color,
-    background_color: Color,
-    font_id: Option<uuid::Uuid>,
+    pub text_color: Color,
+    pub background_color: Color,
+    pub font_id: Option<uuid::Uuid>,
 }
 
 impl Default for ButtonTheme {
     fn default() -> Self {
         Self {
             text_color: Color::WHITE,
-            background_color: Color::RED,
+            background_color: Color::BLUE,
             font_id: None,
         }
     }
+}
+
+#[test]
+fn aabb() {
+    let id = 1;
+
+    let a = Some(id);
+
+    assert_eq!(Some(id), a);
 }

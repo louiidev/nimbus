@@ -1,19 +1,27 @@
 use bevy_ecs::system::Resource;
 use glam::Vec2;
-use wgpu::Device;
+use winit::event::MouseButton;
 
 use crate::{
-    color::Color,
     internal_image::Image,
-    renderer::{RenderBatchItem, RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
-    resources::utils::Assets,
+    renderer::{RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
+    resources::{inputs::InputController, utils::Assets},
     texture_atlas::TextureAtlas,
+    transform::Transform,
     DEFAULT_TEXTURE_ID,
 };
 
-use self::button::{Button, ButtonState};
+use self::{
+    button::Button,
+    id::Id,
+    layout::Layout,
+    widget::{Widget, WidgetResponse},
+};
 
 pub mod button;
+pub mod id;
+pub mod layout;
+pub mod widget;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -61,19 +69,29 @@ pub struct UiConstraint {
     height: Constraint,
 }
 
-pub trait Widget {
-    fn get_size(&self) -> Vec2;
-
-    fn get_render_meta(&self, position_to_render: Vec2) -> RenderBatchMeta<UiVertex>;
-}
-
 #[derive(Resource)]
 pub struct UiHandler {
     pub queued_layouts: Vec<RenderBatchMeta<UiVertex>>,
     current_layout: Vec<Layout>,
     texture_atlases: Assets<TextureAtlas>,
     images: Assets<Image>,
-    default_texture_id: uuid::Uuid,
+    pub input_controller: InputController,
+    pub active_id: Option<Id>,
+    pub hover_id: Option<Id>,
+}
+
+impl Default for UiHandler {
+    fn default() -> Self {
+        UiHandler {
+            queued_layouts: Vec::default(),
+            current_layout: Vec::default(),
+            images: Assets::default(),
+            texture_atlases: Assets::new(),
+            input_controller: InputController::default(),
+            active_id: None,
+            hover_id: None,
+        }
+    }
 }
 
 impl UiHandler {
@@ -85,66 +103,97 @@ impl UiHandler {
             current_layout: Vec::new(),
             images: Assets::new(),
             texture_atlases: Assets::new(),
-            default_texture_id: DEFAULT_TEXTURE_ID,
+            input_controller: InputController::default(),
+            active_id: None,
+            hover_id: None,
         }
     }
 
-    pub fn push<W: Widget>(&mut self, widget: W) {
-        let last_index = self.current_layout.len() - 1;
-        let layout = self
-            .current_layout
-            .get_mut(last_index)
-            .expect("Widget needs to be inside layout to render");
+    // pub fn push<W: Widget>(&mut self, widget: W) {
+    //     let last_index = self.current_layout.len() - 1;
+    //     let layout = self
+    //         .current_layout
+    //         .get_mut(last_index)
+    //         .expect("Widget needs to be inside layout to render");
 
-        let size = widget.get_size();
+    //     let size = widget.get_size();
 
-        let position_to_render = layout.get_next_position();
+    //     let position_to_render = layout.get_next_position();
 
-        let render_meta = widget.get_render_meta(position_to_render);
+    //     let render_meta = widget.get_render_meta(position_to_render);
 
-        layout.push_widget(size);
+    //     layout.push_widget(size);
 
-        layout.ui_meta.push(render_meta);
+    //     layout.ui_meta.push(render_meta);
+    // }
+
+    pub fn check_widget_interactions(&mut self, id: Id, size: Vec2, position: Vec2) {
+        if self.hover_id == Some(id) || self.hover_id.is_none() {
+            let is_hovering = self.check_hover(size, position);
+            if !is_hovering {
+                self.hover_id = None;
+                self.active_id = None;
+                return;
+            }
+
+            self.hover_id = Some(id);
+
+            self.active_id = if self
+                .input_controller
+                .mouse_button_inputs
+                .pressed(MouseButton::Left)
+            {
+                Some(id)
+            } else {
+                None
+            }
+        }
     }
 
-    pub fn button(&mut self, button: Button) -> ButtonState {
-        let last_index = if self.current_layout.is_empty() {
-            0
-        } else {
-            self.current_layout.len() - 1
-        };
+    pub fn generate_id(&self) -> Id {
+        let last_index = self.current_layout.len() - 1;
+
+        let layout = self.get_current_layout();
+
+        Id::new(format!(
+            "Layout_index_{}_ui_count_{}",
+            last_index,
+            layout.ui_meta.len()
+        ))
+    }
+
+    pub fn get_current_layout(&self) -> &Layout {
+        let last_index = self.current_layout.len() - 1;
+        self.current_layout
+            .get(last_index)
+            .expect("generate_id needs to be called inside a layout to work")
+    }
+
+    pub fn get_next_widget_position(&self) -> Vec2 {
+        let last_index = self.current_layout.len() - 1;
 
         let layout = self
             .current_layout
-            .get_mut(last_index)
+            .get(last_index)
             .expect("Button needs to be inside layout to render");
 
-        let button_size = Vec2::new(50., 50.);
+        layout.get_next_position()
+    }
 
-        let position_to_render = layout.get_next_position();
+    pub fn check_hover(&mut self, size: Vec2, position: Vec2) -> bool {
+        collision::rect_contains_point(size, position, self.input_controller.mouse_position)
+    }
 
-        layout.push_widget(button_size);
+    pub fn check_active(&mut self, id: Id) -> bool {
+        Some(id) == self.hover_id
+            && self
+                .input_controller
+                .mouse_button_inputs
+                .pressed(MouseButton::Left)
+    }
 
-        let mut vertices = Vec::new();
-
-        let positions: [[f32; 3]; 4] =
-            QUAD_VERTEX_POSITIONS.map(|quad_pos| (quad_pos + position_to_render).extend(0.).into());
-
-        for i in 0..QUAD_VERTEX_POSITIONS.len() {
-            vertices.push(UiVertex {
-                position: positions[i],
-                tex_coords: QUAD_UVS[i].into(),
-                color: Color::WHITE.as_rgba_f32(),
-            });
-        }
-
-        layout.ui_meta.push(RenderBatchMeta {
-            texture_id: self.default_texture_id,
-            vertices,
-            indices: QUAD_INDICES.to_vec(),
-        });
-
-        ButtonState { clicked: false }
+    pub fn button(&mut self, mut button: Button) -> WidgetResponse {
+        button.ui(self)
     }
 
     pub fn layout<F>(&mut self, position: Vec2, padding: f32, mut callback: F)
@@ -172,56 +221,34 @@ impl UiHandler {
     pub fn end_layout(&mut self) {
         let mut layout = self.current_layout.pop().unwrap();
 
-        // TODO: insert original layout here if it has colour??
+        if let Some(theme) = layout.layout_theme {
+            let transform = Transform::from_xyz(layout.position.x, layout.position.y, 1.0);
+
+            let mut vertices = Vec::new();
+
+            let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
+                (transform // offset the center point so it renders top left
+                    .transform_point(
+                        ((quad_pos - Vec2::new(-0.5, -0.5)) * layout.current_size).extend(1.),
+                    ))
+                .into()
+            });
+
+            for i in 0..QUAD_VERTEX_POSITIONS.len() {
+                vertices.push(UiVertex {
+                    position: positions[i],
+                    tex_coords: QUAD_UVS[i].into(),
+                    color: theme.background_color.as_rgba_f32(),
+                });
+            }
+
+            self.queued_layouts.push(RenderBatchMeta {
+                texture_id: DEFAULT_TEXTURE_ID,
+                vertices,
+                indices: QUAD_INDICES.to_vec(),
+            });
+        }
 
         self.queued_layouts.append(&mut layout.ui_meta);
-    }
-}
-
-#[derive(Default)]
-pub enum LayoutType {
-    #[default]
-    Vertical,
-    Horizontal,
-}
-
-#[derive(Default)]
-pub struct Layout {
-    layout_type: LayoutType,
-    position: Vec2,
-    padding: f32,
-    pub current_size: Vec2,
-    pub(crate) ui_meta: Vec<RenderBatchMeta<UiVertex>>,
-}
-
-impl Layout {
-    pub fn get_next_position(&self) -> Vec2 {
-        match self.layout_type {
-            LayoutType::Horizontal => Vec2::new(self.current_size.x, self.position.y),
-            LayoutType::Vertical => Vec2::new(self.position.x, self.current_size.y),
-        }
-    }
-
-    pub fn push_widget(&mut self, size: Vec2) {
-        self.current_size = match self.layout_type {
-            LayoutType::Horizontal => {
-                let new_y = if size.y > self.current_size.y {
-                    size.y
-                } else {
-                    self.current_size.y
-                };
-
-                Vec2::new(self.current_size.x + size.x, new_y)
-            }
-            LayoutType::Vertical => {
-                let new_x = if size.x > self.current_size.x {
-                    size.x
-                } else {
-                    self.current_size.x
-                };
-
-                Vec2::new(new_x, self.current_size.y + size.y)
-            }
-        }
     }
 }

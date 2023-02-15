@@ -1,27 +1,67 @@
-use crate::events::KeyboardInput;
+use crate::events::{CursorMoved, KeyboardInput, MouseButtonInput};
+use crate::ui::UiHandler;
 use bevy_ecs::prelude::{DetectChanges, EventReader};
 use bevy_ecs::system::{ResMut, Resource};
+use glam::Vec2;
 use std::collections::HashSet;
 use std::hash::Hash;
-use winit::event::{ElementState, VirtualKeyCode};
+use winit::event::{ElementState, MouseButton, VirtualKeyCode};
+
+#[derive(Resource, Default, Clone)]
+pub struct InputController {
+    pub mouse_position: Vec2,
+    pub keyboards_inputs: Input<VirtualKeyCode>,
+    pub mouse_button_inputs: Input<MouseButton>,
+}
+
+impl InputController {
+    pub fn clear(&mut self) {
+        self.keyboards_inputs.clear();
+        self.mouse_button_inputs.clear();
+    }
+}
 
 pub fn input_system(
     mut keyboard_events: EventReader<KeyboardInput>,
-    mut key_input: ResMut<Input<VirtualKeyCode>>,
+    mut cursor_move_events: EventReader<CursorMoved>,
+    mut mouse_button_events: EventReader<MouseButtonInput>,
+    mut input_controller: ResMut<InputController>,
+    mut ui_handler: ResMut<UiHandler>,
 ) {
-    key_input.bypass_change_detection().clear();
+    input_controller.bypass_change_detection().clear();
     for event in keyboard_events.iter() {
         let KeyboardInput {
             key_code, state, ..
         } = event;
         match state {
-            ElementState::Pressed => key_input.press(*key_code),
-            ElementState::Released => key_input.release(*key_code),
+            ElementState::Pressed => input_controller.keyboards_inputs.press(*key_code),
+            ElementState::Released => input_controller.keyboards_inputs.release(*key_code),
         }
     }
+
+    for event in mouse_button_events.iter() {
+        let MouseButtonInput { button, state, .. } = event;
+
+        match state {
+            ElementState::Pressed => {
+                input_controller.mouse_button_inputs.press(*button);
+            }
+            ElementState::Released => {
+                input_controller.mouse_button_inputs.release(*button);
+            }
+        }
+    }
+
+    for event in cursor_move_events.iter() {
+        let CursorMoved { position } = event;
+        input_controller.mouse_position.x = position.x as f32;
+        input_controller.mouse_position.y = position.y as f32;
+    }
+
+    ui_handler.input_controller = input_controller.clone();
 }
 
-#[derive(Debug, Resource)]
+#[derive(Debug, Resource, Clone)]
 pub struct Input<T: Copy + Eq + Hash + Send + Sync + 'static> {
     /// A collection of every button that is currently being pressed.
     pressed: HashSet<T>,

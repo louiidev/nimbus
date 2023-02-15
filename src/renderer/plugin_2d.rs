@@ -13,8 +13,8 @@ use crate::{
 };
 
 use super::{
-    sprite_batching::prepare_sprites_for_batching, ui::prepare_ui_for_batching, RenderBatchItem,
-    Renderer, Vertex,
+    sprite_batching::{cleanup_sprite_batch, prepare_sprites_for_batching},
+    RenderBatchItem, Renderer, Vertex,
 };
 
 #[derive(Resource)]
@@ -48,6 +48,9 @@ impl App {
             .insert_resource(DefaultImageSampler(Arc::new(default_sampler)));
         self.schedule
             .add_system_to_stage(CoreStage::PrepareRenderer, prepare_sprites_for_batching);
+
+        self.schedule
+            .add_system_to_stage(CoreStage::PostRender, cleanup_sprite_batch);
 
         let sprite_batch_resource: Vec<RenderBatchItem> = Vec::new();
 

@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use bevy_ecs::system::Resource;
-use winit::event::VirtualKeyCode;
+use winit::{dpi::PhysicalPosition, event::VirtualKeyCode};
 
 pub trait Event: Send + Sync + 'static {}
 impl<T> Event for T where T: Send + Sync + 'static {}
@@ -25,6 +25,15 @@ pub struct WindowCreated {
 pub struct KeyboardInput {
     pub state: winit::event::ElementState,
     pub key_code: VirtualKeyCode,
+}
+
+pub struct MouseButtonInput {
+    pub state: winit::event::ElementState,
+    pub button: winit::event::MouseButton,
+}
+
+pub struct CursorMoved {
+    pub position: PhysicalPosition<f64>,
 }
 
 #[derive(Debug, Resource)]

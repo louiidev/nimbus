@@ -5,13 +5,14 @@ use bevy_ecs::{
     system::{Query, Res, ResMut, Resource},
 };
 use glam::Vec2;
+use hashbrown::HashMap;
 use wgpu::{
     include_wgsl, util::DeviceExt, BindGroup, BindGroupLayout, Buffer, FragmentState, FrontFace,
     PolygonMode, PrimitiveState, PrimitiveTopology, RenderPass, RenderPipeline,
 };
 
 use crate::{
-    camera::{Camera, CameraUniform},
+    camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID},
     components::sprite::Sprite,
     resources::utils::{Assets, ResourceVec},
     transform::GlobalTransform,
@@ -24,6 +25,10 @@ use super::{
     RenderBatchItem, RenderBatchMeta, Renderer, Vertex, QUAD_INDICES, QUAD_UVS,
     QUAD_VERTEX_POSITIONS,
 };
+
+pub fn cleanup_sprite_batch(mut sprite_batch: ResMut<ResourceVec<RenderBatchItem>>) {
+    sprite_batch.values = Vec::default();
+}
 
 pub fn prepare_sprites_for_batching(
     sprite_query: Query<(&Sprite, &mut GlobalTransform), Without<Camera>>,
@@ -65,7 +70,10 @@ pub fn prepare_sprites_for_batching(
             layout: &sprite_pipeline.camera_bind_group_layout,
         });
 
-    camera.bind_group = Some(Arc::new(camera_bind_group));
+    camera.bind_groups.insert(
+        ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID,
+        Arc::new(camera_bind_group),
+    );
 
     let mut current_batch_texture_id = uuid::Uuid::new_v4();
 
@@ -129,7 +137,7 @@ pub fn prepare_sprites_for_batching(
         }
     }
 
-    let sprite_batches: Vec<RenderBatchItem> = batches
+    let mut sprite_batches: Vec<RenderBatchItem> = batches
         .iter()
         .map(|batch| {
             let vertex_buffer =
@@ -175,23 +183,28 @@ pub fn prepare_sprites_for_batching(
                 index_buffer,
                 texture_bind_group,
                 indices_len: batch.indices.len() as _,
+                camera_bind_group_id: ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID,
             }
         })
         .collect();
 
-    sprite_batch.values = sprite_batches;
+    sprite_batch.values.append(&mut sprite_batches);
 }
 
 pub fn render_sprite_batches<'a>(
     sprite_batch: &'a Vec<RenderBatchItem>,
     render_pass: &mut RenderPass<'a>,
     sprite_pipeline: &'a SpritePipeline,
-    camera_bind_group: &'a BindGroup,
+    camera_bind_group: &'a HashMap<u8, Arc<wgpu::BindGroup>>,
 ) {
     render_pass.set_pipeline(&sprite_pipeline.render_pipeline);
-    render_pass.set_bind_group(0, camera_bind_group, &[]);
 
     for batch in sprite_batch {
+        render_pass.set_bind_group(
+            0,
+            &camera_bind_group.get(&batch.camera_bind_group_id).unwrap(),
+            &[],
+        );
         render_pass.set_bind_group(1, &batch.texture_bind_group, &[]);
         render_pass.set_vertex_buffer(0, batch.vertex_buffer.slice(..));
         render_pass.set_index_buffer(batch.index_buffer.slice(..), wgpu::IndexFormat::Uint16);

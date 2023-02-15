@@ -5,14 +5,12 @@ use bevy_ecs::{
 
 use glam::Vec2;
 use uuid::Uuid;
-use wgpu::{BindGroup, Buffer, Extent3d};
+use wgpu::{BindGroup, Buffer};
 use winit::window::Window;
 
-use crate::{camera::Camera, internal_image::Image, resources::utils::ResourceVec, time::Time};
+use crate::{camera::Camera, resources::utils::ResourceVec, time::Time};
 
-use texture::Texture;
-
-use self::{plugin_2d::SpritePipeline, sprite_batching::render_sprite_batches, ui::render_ui};
+use self::{plugin_2d::SpritePipeline, sprite_batching::render_sprite_batches};
 
 pub const QUAD_INDICES: [u16; 6] = [0, 2, 3, 0, 1, 2];
 
@@ -139,10 +137,7 @@ pub fn render_system(
                 label: Some("Render Encoder"),
             });
 
-    let bind_group = camera.bind_group.take().unwrap();
     {
-        let camera_bind_group = bind_group.as_ref();
-
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -164,7 +159,7 @@ pub fn render_system(
             &sprite_batch.values,
             &mut render_pass,
             &sprite_pipeline,
-            camera_bind_group,
+            &camera.bind_groups,
         );
 
         // render_ui(&mut render_pass);
@@ -204,8 +199,7 @@ impl Vertex {
                     format: wgpu::VertexFormat::Float32x2,
                 },
                 wgpu::VertexAttribute {
-                    offset: (std::mem::size_of::<[f32; 2]>() + std::mem::size_of::<[f32; 3]>())
-                        as wgpu::BufferAddress,
+                    offset: (std::mem::size_of::<[f32; 5]>()) as wgpu::BufferAddress,
                     shader_location: 2,
                     format: wgpu::VertexFormat::Float32x4,
                 },
@@ -220,6 +214,7 @@ pub struct RenderBatchItem {
     index_buffer: Buffer,
     texture_bind_group: BindGroup,
     indices_len: u32,
+    camera_bind_group_id: u8,
 }
 
 pub struct RenderBatchMeta<V> {

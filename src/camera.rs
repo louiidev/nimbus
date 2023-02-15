@@ -6,11 +6,16 @@ use bevy_ecs::{
     system::{Query, Res, ResMut, Resource},
 };
 use glam::{Mat4, UVec2, Vec2};
+use hashbrown::HashMap;
 
 use crate::{
     events::{WindowCreated, WindowResized},
     transform::{GlobalTransform, Transform},
 };
+
+pub const ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID: u8 = 0;
+
+pub const ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID: u8 = 1;
 
 #[derive(Bundle, Debug)]
 pub struct CameraBundle {
@@ -158,8 +163,20 @@ impl OrthographicProjection {
         )
     }
 
+    fn get_projection_matrix_ui(logical_size: Vec2) -> Mat4 {
+        Mat4::orthographic_rh(
+            0.0,
+            logical_size.x,
+            logical_size.y,
+            0.0,
+            // NOTE: near and far are swapped to invert the depth range from [0,1] to [1,0]
+            // This is for interoperability with pipelines using infinite reverse perspective projections.
+            0.0,
+            1000.,
+        )
+    }
+
     fn update(&mut self, width: f32, height: f32) {
-        println!("UPDATES");
         let (viewport_width, viewport_height) = match self.scaling_mode {
             ScalingMode::WindowSize => (width, height),
             ScalingMode::AutoMin {
@@ -256,7 +273,7 @@ pub struct Camera {
     pub is_active: bool,
     pub target: RenderTarget,
     pub computed: ComputedCameraValues,
-    pub(crate) bind_group: Option<Arc<wgpu::BindGroup>>,
+    pub(crate) bind_groups: HashMap<u8, Arc<wgpu::BindGroup>>,
     pub orthographic_projection: OrthographicProjection,
 }
 
@@ -279,7 +296,7 @@ impl Default for Camera {
             viewport: None,
             computed: Default::default(),
             target: Default::default(),
-            bind_group: None,
+            bind_groups: HashMap::default(),
             orthographic_projection: OrthographicProjection::default(),
         }
     }
@@ -289,6 +306,10 @@ impl Camera {
     #[inline]
     pub fn projection_matrix(&self) -> Mat4 {
         self.orthographic_projection.get_projection_matrix()
+    }
+
+    pub fn projection_matrix_ui(&self, logical_window_size: Vec2) -> Mat4 {
+        OrthographicProjection::get_projection_matrix_ui(logical_window_size)
     }
 
     /// Converts a physical size in this `Camera` to a logical size.

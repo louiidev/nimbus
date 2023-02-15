@@ -10,24 +10,18 @@ use wgpu::{
 };
 
 use crate::{
-    camera::{Camera, CameraUniform},
-    components::sprite::Sprite,
-    internal_image::{Image, DEFAULT_TEXTURE_FORMAT},
+    camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID},
     resources::utils::{Assets, ResourceVec},
     transform::GlobalTransform,
     ui::{UiHandler, UiVertex},
-    App, CoreStage, DEFAULT_TEXTURE_ID,
+    App, CoreStage,
 };
 
 use super::{
     plugin_2d::{DefaultImageSampler, SpritePipeline},
     texture::Texture,
-    RenderBatchItem, RenderBatchMeta, Renderer, QUAD_UVS, QUAD_VERTEX_POSITIONS,
+    RenderBatchItem, RenderBatchMeta, Renderer,
 };
-
-pub fn create_ui_pipeline() {}
-
-pub fn render_ui<'a>(render_pass: &mut RenderPass<'a>, pipeline: RenderPipeline) {}
 
 pub fn prepare_ui_for_batching(
     mut ui_handler: ResMut<UiHandler>,
@@ -38,6 +32,45 @@ pub fn prepare_ui_for_batching(
     mut layout_batches: ResMut<ResourceVec<RenderBatchItem>>,
     mut camera: Query<(&mut Camera, &mut GlobalTransform)>,
 ) {
+    let (mut camera, global_transform) = camera.get_single_mut().unwrap();
+
+    let projection = camera.projection_matrix_ui(Vec2::new(
+        renderer.size.width as f32,
+        renderer.size.height as f32,
+    ));
+
+    let view = global_transform.compute_matrix();
+    let inverse_view = view.inverse();
+    let view_projection = projection * inverse_view;
+
+    let camera_uniform = CameraUniform {
+        view_proj: view_projection.to_cols_array_2d(),
+    };
+
+    let camera_buffer = renderer
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("View Buffer"),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+            contents: bytemuck::cast_slice(&[camera_uniform]),
+        });
+
+    let camera_bind_group = renderer
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+            label: Some("sprite camera bind group"),
+            layout: &sprite_pipeline.camera_bind_group_layout,
+        });
+
+    camera.bind_groups.insert(
+        ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID,
+        Arc::new(camera_bind_group),
+    );
+
     let mut current_batch_texture_id = uuid::Uuid::new_v4();
 
     let mut batches: Vec<RenderBatchMeta<UiVertex>> = Vec::new();
@@ -67,7 +100,7 @@ pub fn prepare_ui_for_batching(
         }
     }
 
-    let batches: Vec<RenderBatchItem> = batches
+    let mut batches: Vec<RenderBatchItem> = batches
         .iter()
         .map(|batch| {
             let vertex_buffer =
@@ -113,11 +146,12 @@ pub fn prepare_ui_for_batching(
                 index_buffer,
                 texture_bind_group,
                 indices_len: batch.indices.len() as _,
+                camera_bind_group_id: ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID,
             }
         })
         .collect();
 
-    layout_batches.values = batches;
+    layout_batches.values.append(&mut batches);
 }
 
 impl App {

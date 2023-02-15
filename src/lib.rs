@@ -5,13 +5,13 @@ use bevy_ecs::{
     world::{FromWorld, World},
 };
 
-use events::{KeyboardInput, WindowCreated, WindowResized};
+use events::{CursorMoved, KeyboardInput, MouseButtonInput, WindowCreated, WindowResized};
 use font::FontAtlasSet;
 use internal_image::{Image, DEFAULT_TEXTURE_FORMAT};
 use renderer::{render_system, renderable::RenderCache, texture::Texture, Renderer};
 
 use resources::{
-    inputs::{input_system, Input},
+    inputs::{input_system, InputController},
     utils::Assets,
 };
 use texture_atlas::TextureAtlas;
@@ -21,13 +21,13 @@ use ui::UiHandler;
 use wgpu::{Extent3d, TextureDimension};
 use window::{create_window, WindowDescriptor};
 use winit::{
-    event::{ElementState, Event, VirtualKeyCode, WindowEvent},
-    event_loop::{self, ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
+    event::{Event, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::Window,
 };
 
 pub const DEFAULT_TEXTURE_ID: uuid::Uuid =
-    uuid::Uuid::from_u64_pair(13148262314052771789, 13148262314052771789);
+    uuid::Uuid::from_u128(0xa1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d8u128);
 
 pub mod camera;
 pub mod color;
@@ -62,11 +62,9 @@ pub enum CoreStage {
     Update,
     /// The [`Stage`](bevy_ecs::schedule::Stage) that runs after [`CoreStage::Update`].
     PostUpdate,
-    /// The [`Stage`](bevy_ecs::schedule::Stage) that runs after all other app stages.
-    Last,
     PrepareRenderer,
     Render,
-    // Cleanup render cache
+    /// Cleanup render cache that runs after [`CoreStage::Render`].
     PostRender,
 }
 
@@ -106,14 +104,15 @@ impl App {
             .add_stage(CoreStage::PreUpdate, SystemStage::parallel())
             .add_stage(CoreStage::Update, SystemStage::parallel())
             .add_stage(CoreStage::PostUpdate, SystemStage::parallel())
-            .add_stage(CoreStage::Last, SystemStage::parallel())
             .add_stage(CoreStage::PrepareRenderer, SystemStage::parallel())
             .add_stage(CoreStage::Render, SystemStage::parallel())
             .add_stage(CoreStage::PostRender, SystemStage::parallel());
 
         self.add_event::<WindowResized>()
             .add_event::<WindowCreated>()
-            .add_event::<KeyboardInput>();
+            .add_event::<KeyboardInput>()
+            .add_event::<CursorMoved>()
+            .add_event::<MouseButtonInput>();
     }
 
     fn add_assets(mut self) -> Self {
@@ -135,8 +134,7 @@ impl App {
 
     fn add_default_system_resources(mut self) -> Self {
         self.add_default_stages();
-
-        self.init_resource::<Input<VirtualKeyCode>>();
+        self.init_resource::<InputController>();
 
         self.init_resource::<Time>();
 
@@ -184,7 +182,7 @@ impl App {
             height: window_size.height as f32,
         });
 
-        let mut app = App {
+        let app = App {
             window,
             world,
             event_loop: Some(event_loop),
@@ -252,6 +250,12 @@ impl App {
                             });
                         }
                     }
+                    WindowEvent::MouseInput { state, button, .. } => {
+                        self.world.send_event(MouseButtonInput {
+                            state: *state,
+                            button: *button,
+                        });
+                    }
                     WindowEvent::Resized(physical_size) => {
                         let mut renderer = self.world.get_resource_mut::<Renderer>().unwrap();
                         renderer.resize(*physical_size);
@@ -265,16 +269,17 @@ impl App {
                         let mut renderer = self.world.get_resource_mut::<Renderer>().unwrap();
                         renderer.resize(**new_inner_size);
                     }
+                    WindowEvent::CursorMoved { position, .. } => {
+                        self.world.send_event(CursorMoved {
+                            position: *position,
+                        });
+                    }
                     _ => {}
                 },
 
-                Event::RedrawRequested(_) => {
-                    self.update();
-                }
+                Event::RedrawEventsCleared => *control_flow = ControlFlow::Poll,
                 Event::MainEventsCleared => {
-                    // RedrawRequested will only trigger once, unless we manually
-                    // request it.
-                    window.request_redraw();
+                    self.update();
                 }
 
                 _ => (),
