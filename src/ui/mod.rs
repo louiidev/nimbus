@@ -3,13 +3,16 @@ use glam::Vec2;
 use winit::event::MouseButton;
 
 use crate::{
+    components::text::Text,
+    font::FontAtlasSet,
     internal_image::Image,
+    rect::Rect,
     renderer::{RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
     resources::{inputs::InputController, utils::Assets},
     texture_atlas::TextureAtlas,
     transform::Transform,
     utils::collision,
-    DEFAULT_TEXTURE_ID,
+    DEFAULT_FONT_ID, DEFAULT_TEXTURE_ID,
 };
 
 use self::{
@@ -74,11 +77,12 @@ pub struct UiConstraint {
 pub struct UiHandler {
     pub queued_layouts: Vec<RenderBatchMeta<UiVertex>>,
     current_layout: Vec<Layout>,
-    texture_atlases: Assets<TextureAtlas>,
+    pub texture_atlases: Assets<TextureAtlas>,
     images: Assets<Image>,
     pub input_controller: InputController,
     pub active_id: Option<Id>,
     pub hover_id: Option<Id>,
+    pub font_atlas: FontAtlasSet,
 }
 
 impl Default for UiHandler {
@@ -91,6 +95,7 @@ impl Default for UiHandler {
             input_controller: InputController::default(),
             active_id: None,
             hover_id: None,
+            font_atlas: FontAtlasSet::default(),
         }
     }
 }
@@ -107,6 +112,7 @@ impl UiHandler {
             input_controller: InputController::default(),
             active_id: None,
             hover_id: None,
+            font_atlas: FontAtlasSet::default(),
         }
     }
 
@@ -195,6 +201,22 @@ impl UiHandler {
 
     pub fn button(&mut self, mut button: Button) -> WidgetResponse {
         button.ui(self)
+    }
+
+    pub fn text(&mut self, text: Text, bounds: (f32, f32), font_size: f32) {
+        let font = self.font_atlas.fonts.get(&DEFAULT_FONT_ID).unwrap();
+
+        let text_glyphs = self
+            .font_atlas
+            .queue_text(&font.font, text, bounds, font_size);
+
+        for text_glyph in text_glyphs {
+            let atlas = self
+                .font_atlas
+                .texture_atlases
+                .get(&text_glyph.atlas_info.texture_atlas_id)
+                .unwrap();
+        }
     }
 
     pub fn layout<F>(&mut self, position: Vec2, padding: f32, mut callback: F)

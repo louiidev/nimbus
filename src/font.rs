@@ -129,8 +129,20 @@ pub struct GlyphAtlasInfo {
 
 pub struct FontAtlasSet {
     font_atlases: HashMap<FontSizeKey, Vec<FontAtlas>>,
-    texture_atlases: Assets<TextureAtlas>,
+    pub texture_atlases: Assets<TextureAtlas>,
     temp_image_storage: Assets<Image>,
+    pub fonts: Assets<Font>,
+}
+
+impl Default for FontAtlasSet {
+    fn default() -> Self {
+        FontAtlasSet {
+            font_atlases: HashMap::with_capacity_and_hasher(1, Default::default()),
+            texture_atlases: Assets::new(),
+            temp_image_storage: Assets::new(),
+            fonts: Assets::new(),
+        }
+    }
 }
 
 impl FontAtlasSet {
@@ -230,7 +242,8 @@ impl FontAtlasSet {
                 });
             }
         }
-        return positioned_glyphs;
+
+        positioned_glyphs
     }
 
     pub fn add_glyph_to_atlas(

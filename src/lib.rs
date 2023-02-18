@@ -8,7 +8,7 @@ use bevy_ecs::{
 use events::{CursorMoved, KeyboardInput, MouseButtonInput, WindowCreated, WindowResized};
 use font::FontAtlasSet;
 use internal_image::{Image, DEFAULT_TEXTURE_FORMAT};
-use renderer::{render_system, renderable::RenderCache, texture::Texture, Renderer};
+use renderer::{render_system, texture::Texture, Renderer};
 
 use resources::{
     inputs::{input_system, InputController},
@@ -28,6 +28,9 @@ use winit::{
 
 pub const DEFAULT_TEXTURE_ID: uuid::Uuid =
     uuid::Uuid::from_u128(0xa1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d8u128);
+
+pub const DEFAULT_FONT_ID: uuid::Uuid =
+    uuid::Uuid::from_u128(0xa1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d9u128);
 
 pub mod camera;
 pub mod color;
@@ -137,8 +140,6 @@ impl App {
         self.init_resource::<InputController>();
 
         self.init_resource::<Time>();
-
-        self.init_resource::<RenderCache>();
 
         self.add_system_to_stage(render_system, CoreStage::Render)
             .add_system_to_stage(transform_propagate_system, CoreStage::PostUpdate)

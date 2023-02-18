@@ -40,7 +40,6 @@ pub struct Renderer {
 
 pub(crate) mod mesh;
 pub(crate) mod plugin_2d;
-pub(crate) mod renderable;
 pub(crate) mod sprite_batching;
 pub mod texture;
 pub(crate) mod ui;
