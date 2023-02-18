@@ -8,9 +8,14 @@ use uuid::Uuid;
 use wgpu::{BindGroup, Buffer};
 use winit::window::Window;
 
-use crate::{camera::Camera, resources::utils::ResourceVec, time::Time};
+use crate::{
+    camera::Camera,
+    resources::utils::{Assets, ResourceVec},
+    time::Time,
+    ui::UiHandler,
+};
 
-use self::{plugin_2d::SpritePipeline, sprite_batching::render_sprite_batches};
+use self::{plugin_2d::SpritePipeline, sprite_batching::render_sprite_batches, texture::Texture};
 
 pub const QUAD_INDICES: [u16; 6] = [0, 2, 3, 0, 1, 2];
 
@@ -107,6 +112,23 @@ impl Renderer {
             self.surface.configure(&self.device, &self.config);
         } else {
             panic!("Invalid size???");
+        }
+    }
+}
+
+pub fn upload_images_to_gpu(
+    renderer: Res<Renderer>,
+    mut ui_handler: ResMut<UiHandler>,
+    mut textures: ResMut<Assets<Texture>>,
+) {
+    for (key, image) in ui_handler.texture_atlases_images.data.iter_mut() {
+        if image.dirty {
+            textures.insert(
+                *key,
+                Texture::from_image(&renderer.device, &renderer.queue, image, None),
+            );
+
+            image.dirty = false;
         }
     }
 }

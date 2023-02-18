@@ -86,7 +86,7 @@ impl DynamicTextureAtlasBuilder {
     pub fn add_texture(
         &mut self,
         texture_atlas: &mut TextureAtlas,
-        images: &mut Assets<Image>,
+        textures: &mut Assets<Image>,
         image: &Image,
     ) -> Option<usize> {
         let allocation = self.atlas_allocator.allocate(size2(
@@ -94,7 +94,7 @@ impl DynamicTextureAtlasBuilder {
             image.texture_descriptor.size.height as i32 + self.padding,
         ));
         if let Some(allocation) = allocation {
-            let atlas_texture = images.get_mut(&texture_atlas.texture_id).unwrap();
+            let atlas_texture = textures.get_mut(&texture_atlas.texture_id).unwrap();
             self.place_texture(atlas_texture, allocation, image);
             let mut rect: Rect = to_rect(allocation.rectangle);
             rect.max -= self.padding as f32;
@@ -104,18 +104,13 @@ impl DynamicTextureAtlasBuilder {
         }
     }
 
-    fn place_texture(
-        &mut self,
-        atlas_texture: &mut Image,
-        allocation: Allocation,
-        texture: &Image,
-    ) {
+    fn place_texture(&mut self, atlas_image: &mut Image, allocation: Allocation, image: &Image) {
         let mut rect = allocation.rectangle;
         rect.max.x -= self.padding;
         rect.max.y -= self.padding;
-        let atlas_width = atlas_texture.texture_descriptor.size.width as usize;
+        let atlas_width = atlas_image.texture_descriptor.size.width as usize;
         let rect_width = rect.width() as usize;
-        let format_size: usize = atlas_texture
+        let format_size: usize = atlas_image
             .texture_descriptor
             .format
             .describe()
@@ -127,9 +122,9 @@ impl DynamicTextureAtlasBuilder {
             let end = begin + rect_width * format_size;
             let texture_begin = texture_y * rect_width * format_size;
             let texture_end = texture_begin + rect_width * format_size;
-            atlas_texture.data[begin..end]
-                .copy_from_slice(&texture.data[texture_begin..texture_end]);
+            atlas_image.data[begin..end].copy_from_slice(&image.data[texture_begin..texture_end]);
         }
+        atlas_image.dirty = true;
     }
 }
 

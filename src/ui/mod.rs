@@ -4,9 +4,8 @@ use winit::event::MouseButton;
 
 use crate::{
     components::text::Text,
-    font::FontAtlasSet,
+    font::{Font, FontAtlasSet},
     internal_image::Image,
-    rect::Rect,
     renderer::{RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
     resources::{inputs::InputController, utils::Assets},
     texture_atlas::TextureAtlas,
@@ -78,11 +77,12 @@ pub struct UiHandler {
     pub queued_layouts: Vec<RenderBatchMeta<UiVertex>>,
     current_layout: Vec<Layout>,
     pub texture_atlases: Assets<TextureAtlas>,
-    images: Assets<Image>,
+    pub texture_atlases_images: Assets<Image>,
     pub input_controller: InputController,
     pub active_id: Option<Id>,
     pub hover_id: Option<Id>,
     pub font_atlas: FontAtlasSet,
+    pub(crate) fonts: Assets<Font>,
 }
 
 impl Default for UiHandler {
@@ -90,12 +90,13 @@ impl Default for UiHandler {
         UiHandler {
             queued_layouts: Vec::default(),
             current_layout: Vec::default(),
-            images: Assets::default(),
             texture_atlases: Assets::new(),
             input_controller: InputController::default(),
             active_id: None,
             hover_id: None,
             font_atlas: FontAtlasSet::default(),
+            fonts: Assets::new(),
+            texture_atlases_images: Assets::default(),
         }
     }
 }
@@ -107,32 +108,15 @@ impl UiHandler {
         UiHandler {
             queued_layouts: Vec::new(),
             current_layout: Vec::new(),
-            images: Assets::new(),
+            texture_atlases_images: Assets::new(),
             texture_atlases: Assets::new(),
             input_controller: InputController::default(),
             active_id: None,
             hover_id: None,
             font_atlas: FontAtlasSet::default(),
+            fonts: Assets::new(),
         }
     }
-
-    // pub fn push<W: Widget>(&mut self, widget: W) {
-    //     let last_index = self.current_layout.len() - 1;
-    //     let layout = self
-    //         .current_layout
-    //         .get_mut(last_index)
-    //         .expect("Widget needs to be inside layout to render");
-
-    //     let size = widget.get_size();
-
-    //     let position_to_render = layout.get_next_position();
-
-    //     let render_meta = widget.get_render_meta(position_to_render);
-
-    //     layout.push_widget(size);
-
-    //     layout.ui_meta.push(render_meta);
-    // }
 
     pub fn check_widget_interactions(&mut self, id: Id, size: Vec2, position: Vec2) {
         if self.hover_id == Some(id) || self.hover_id.is_none() {
@@ -169,6 +153,13 @@ impl UiHandler {
         ))
     }
 
+    pub fn get_current_layout_mut(&mut self) -> &mut Layout {
+        let last_index = self.current_layout.len() - 1;
+        self.current_layout
+            .get_mut(last_index)
+            .expect("generate_id needs to be called inside a layout to work")
+    }
+
     pub fn get_current_layout(&self) -> &Layout {
         let last_index = self.current_layout.len() - 1;
         self.current_layout
@@ -200,22 +191,69 @@ impl UiHandler {
     }
 
     pub fn button(&mut self, mut button: Button) -> WidgetResponse {
-        button.ui(self)
+        let response = button.ui(self);
+
+        response
     }
 
-    pub fn text(&mut self, text: Text, bounds: (f32, f32), font_size: f32) {
-        let font = self.font_atlas.fonts.get(&DEFAULT_FONT_ID).unwrap();
-
-        let text_glyphs = self
-            .font_atlas
-            .queue_text(&font.font, text, bounds, font_size);
+    pub fn text(&mut self, text: Text, bounds: Vec2) {
+        let font = self.fonts.get(&DEFAULT_FONT_ID).unwrap();
+        let mut uvs = QUAD_UVS;
+        let text_glyphs = self.font_atlas.queue_text(
+            &font.font,
+            &text,
+            bounds,
+            text.theme.font_size,
+            &mut self.texture_atlases,
+            &mut self.texture_atlases_images,
+        );
 
         for text_glyph in text_glyphs {
             let atlas = self
-                .font_atlas
                 .texture_atlases
                 .get(&text_glyph.atlas_info.texture_atlas_id)
                 .unwrap();
+
+            let current_image_size = atlas.size;
+
+            let index = text_glyph.atlas_info.glyph_index;
+            let rect = atlas.textures[index];
+            let transform = Transform::from_xyz(text_glyph.position.x, text_glyph.position.y, 1.0);
+
+            let mut vertices = Vec::new();
+
+            let (uvs, quad_size) = {
+                let rect_size = rect.size();
+                for uv in &mut uvs {
+                    *uv = (rect.min + *uv * rect_size) / current_image_size;
+                }
+
+                (uvs, rect_size)
+            };
+
+            let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
+                transform
+                    .transform_point(((quad_pos - Vec2::new(-0.5, -0.5)) * quad_size).extend(0.))
+                    .into()
+            });
+
+            for i in 0..QUAD_VERTEX_POSITIONS.len() {
+                vertices.push(UiVertex {
+                    position: positions[i],
+                    tex_coords: uvs[i].into(),
+                    color: text.theme.color.as_rgba_f32(),
+                });
+            }
+
+            let meta = RenderBatchMeta {
+                texture_id: text_glyph.atlas_info.texture_atlas_id,
+                vertices,
+                indices: QUAD_INDICES.to_vec(),
+            };
+
+            let layout = self.get_current_layout_mut();
+
+            layout.ui_meta.push(meta);
         }
     }
 

@@ -2,6 +2,7 @@ use glam::Vec2;
 
 use crate::{
     color::Color,
+    components::text::{Text, TextAlignment, TextTheme},
     renderer::{RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
     transform::Transform,
     DEFAULT_TEXTURE_ID,
@@ -50,6 +51,18 @@ impl<'a> Widget for Button<'a> {
         layout.ui_meta.push(self.get_render_meta());
 
         layout.push_widget(size);
+
+        ui.text(
+            Text {
+                alignment: TextAlignment::default(),
+                value: self.text.to_string(),
+                theme: TextTheme {
+                    font_size: self.theme.font_size,
+                    color: self.theme.text_color,
+                },
+            },
+            size,
+        );
 
         WidgetResponse { clicked }
     }
@@ -112,6 +125,7 @@ pub struct ButtonTheme {
     pub text_color: Color,
     pub background_color: Color,
     pub font_id: Option<uuid::Uuid>,
+    pub font_size: f32,
 }
 
 impl Default for ButtonTheme {
@@ -120,6 +134,7 @@ impl Default for ButtonTheme {
             text_color: Color::WHITE,
             background_color: Color::BLUE,
             font_id: None,
+            font_size: 16.,
         }
     }
 }

@@ -16,6 +16,7 @@ pub struct Image {
     pub data: Vec<u8>,
     pub texture_descriptor: wgpu::TextureDescriptor<'static>,
     pub texture_view_descriptor: Option<wgpu::TextureViewDescriptor<'static>>,
+    pub(crate) dirty: bool,
 }
 
 impl Default for Image {
@@ -39,6 +40,7 @@ impl Default for Image {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             },
             texture_view_descriptor: None,
+            dirty: true,
         }
     }
 }
@@ -133,12 +135,4 @@ fn white_image() {
         &[255u8; 4],
         DEFAULT_TEXTURE_FORMAT,
     );
-}
-
-#[derive(Debug)]
-pub struct GpuImage {
-    pub texture: Texture,
-    pub texture_view: TextureView,
-    pub texture_format: TextureFormat,
-    pub size: Vec2,
 }

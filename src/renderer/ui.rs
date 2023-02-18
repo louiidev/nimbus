@@ -116,7 +116,10 @@ pub fn prepare_ui_for_batching(
                         usage: wgpu::BufferUsages::INDEX,
                     });
 
-            let texture = sprite_assets.data.get(&batch.texture_id).unwrap();
+            let texture = sprite_assets
+                .data
+                .get(&batch.texture_id)
+                .expect(&format!("Missing texture id = {}", &batch.texture_id));
 
             let texture_bind_group =
                 renderer

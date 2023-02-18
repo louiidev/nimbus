@@ -47,7 +47,7 @@ impl Font {
         });
 
         // TODO: make this texture grayscale
-        Image::new(
+        let image = Image::new(
             Extent3d {
                 width: width as u32,
                 height: height as u32,
@@ -59,7 +59,9 @@ impl Font {
                 .flat_map(|a| vec![255, 255, 255, (*a * 255.0) as u8])
                 .collect::<Vec<u8>>(),
             TextureFormat::Rgba8UnormSrgb,
-        )
+        );
+
+        image
     }
 }
 
@@ -75,7 +77,7 @@ impl FontAtlas {
         texture_atlases: &mut Assets<TextureAtlas>,
         size: Vec2,
     ) -> FontAtlas {
-        let atlas_texture = images.add(Image::new_fill(
+        let atlas_texture_id = images.add(Image::new_fill(
             Extent3d {
                 width: size.x as u32,
                 height: size.y as u32,
@@ -85,9 +87,12 @@ impl FontAtlas {
             &[0, 0, 0, 0],
             TextureFormat::Rgba8UnormSrgb,
         ));
-        let texture_atlas = TextureAtlas::new_empty(atlas_texture, size);
+
+        let texture_atlas = TextureAtlas::new_empty(atlas_texture_id, size);
+        texture_atlases.insert(atlas_texture_id, texture_atlas);
+
         Self {
-            texture_atlas_id: texture_atlases.add(texture_atlas),
+            texture_atlas_id: atlas_texture_id,
             glyph_to_atlas_index: HashMap::default(),
             dynamic_texture_atlas_builder: DynamicTextureAtlasBuilder::new(size, 1),
         }
@@ -129,18 +134,12 @@ pub struct GlyphAtlasInfo {
 
 pub struct FontAtlasSet {
     font_atlases: HashMap<FontSizeKey, Vec<FontAtlas>>,
-    pub texture_atlases: Assets<TextureAtlas>,
-    temp_image_storage: Assets<Image>,
-    pub fonts: Assets<Font>,
 }
 
 impl Default for FontAtlasSet {
     fn default() -> Self {
         FontAtlasSet {
             font_atlases: HashMap::with_capacity_and_hasher(1, Default::default()),
-            texture_atlases: Assets::new(),
-            temp_image_storage: Assets::new(),
-            fonts: Assets::new(),
         }
     }
 }
@@ -157,12 +156,14 @@ impl FontAtlasSet {
     pub fn queue_text(
         &mut self,
         font: &FontArc,
-        text: Text,
-        bounds: (f32, f32),
+        text: &Text,
+        bounds: Vec2,
         font_size: f32,
+        texture_atlases: &mut Assets<TextureAtlas>,
+        temp_image_storage: &mut Assets<Image>,
     ) -> Vec<PositionedGlyph> {
         let geom = SectionGeometry {
-            bounds,
+            bounds: (bounds.x, bounds.y),
             ..Default::default()
         };
 
@@ -214,12 +215,11 @@ impl FontAtlasSet {
                 let atlas_info = self
                     .get_glyph_atlas_info(font_size, glyph_id)
                     .map(Ok)
-                    .unwrap_or_else(|| self.add_glyph_to_atlas(outline_glyph))
+                    .unwrap_or_else(|| {
+                        self.add_glyph_to_atlas(outline_glyph, texture_atlases, temp_image_storage)
+                    })
                     .unwrap();
-                let texture_atlas = self
-                    .texture_atlases
-                    .get(&atlas_info.texture_atlas_id)
-                    .unwrap();
+                let texture_atlas = texture_atlases.get(&atlas_info.texture_atlas_id).unwrap();
                 let glyph_rect = texture_atlas.textures[atlas_info.glyph_index];
                 let size = Vec2::new(glyph_rect.width(), glyph_rect.height());
                 let x = bounds.min.x + size.x / 2.0 - min_x;
@@ -249,6 +249,8 @@ impl FontAtlasSet {
     pub fn add_glyph_to_atlas(
         &mut self,
         outlined_glyph: OutlinedGlyph,
+        texture_atlases: &mut Assets<TextureAtlas>,
+        temp_image_storage: &mut Assets<Image>,
     ) -> Result<GlyphAtlasInfo, TextError> {
         let glyph = outlined_glyph.glyph(); // FUTURE CHECK used to be shared ref, why can't we clone?
 
@@ -259,8 +261,8 @@ impl FontAtlasSet {
             .entry(FloatOrd(font_size))
             .or_insert_with(|| {
                 vec![FontAtlas::new(
-                    &mut self.temp_image_storage,
-                    &mut self.texture_atlases,
+                    temp_image_storage,
+                    texture_atlases,
                     Vec2::splat(512.0),
                 )]
             });
@@ -269,8 +271,8 @@ impl FontAtlasSet {
 
         let add_char_to_font_atlas = |atlas: &mut FontAtlas| -> bool {
             atlas.add_glyph(
-                &mut self.temp_image_storage,
-                &mut self.texture_atlases,
+                temp_image_storage,
+                texture_atlases,
                 glyph.id,
                 &glyph_texture,
             )
@@ -285,13 +287,13 @@ impl FontAtlasSet {
             // Pick the higher  of 512 or the smallest power of 2 greater than glyph_max_size
             let containing = (1u32 << (32 - glyph_max_size.leading_zeros())).max(512) as f32;
             font_atlases.push(FontAtlas::new(
-                &mut self.temp_image_storage,
-                &mut self.texture_atlases,
+                temp_image_storage,
+                texture_atlases,
                 Vec2::new(containing, containing),
             ));
             if !font_atlases.last_mut().unwrap().add_glyph(
-                &mut self.temp_image_storage,
-                &mut self.texture_atlases,
+                temp_image_storage,
+                texture_atlases,
                 glyph.id,
                 &glyph_texture,
             ) {
