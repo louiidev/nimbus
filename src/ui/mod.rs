@@ -3,9 +3,11 @@ use glam::Vec2;
 use winit::event::MouseButton;
 
 use crate::{
+    color::Color,
     components::text::Text,
     font::{Font, FontAtlasSet},
     internal_image::Image,
+    rect::Rect,
     renderer::{RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
     resources::{inputs::InputController, utils::Assets},
     texture_atlas::TextureAtlas,
@@ -196,13 +198,57 @@ impl UiHandler {
         response
     }
 
-    pub fn text(&mut self, text: Text, bounds: Vec2) {
+    pub fn image(&mut self) {
+        for (id, image) in self.texture_atlases_images.data.iter() {
+            let position = Vec2::new(200., 200.);
+
+            let image_size = Vec2::new(
+                image.texture_descriptor.size.width as f32,
+                image.texture_descriptor.size.height as f32,
+            );
+
+            let transform = Transform::from_xyz(position.x, position.y, 1.0);
+
+            let mut vertices = Vec::new();
+
+            let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
+                (transform // offset the center point so it renders top left
+                        .transform_point(
+                            ((quad_pos - Vec2::new(-0.5, -0.5)) * image_size).extend(1.),
+                        ))
+                    .into()
+            });
+
+            for i in 0..QUAD_VERTEX_POSITIONS.len() {
+                vertices.push(UiVertex {
+                    position: positions[i],
+                    tex_coords: QUAD_UVS[i].into(),
+                    color: Color::WHITE.as_rgba_f32(),
+                });
+            }
+            let last_index = self.current_layout.len() - 1;
+            let layout = self
+                .current_layout
+                .get_mut(last_index)
+                .expect("Button needs to be inside layout to render");
+
+            let meta = RenderBatchMeta {
+                texture_id: *id,
+                vertices,
+                indices: QUAD_INDICES.to_vec(),
+            };
+
+            layout.ui_meta.push(meta);
+        }
+    }
+
+    pub fn text(&mut self, text: Text, rect: Rect) {
         let font = self.fonts.get(&DEFAULT_FONT_ID).unwrap();
         let mut uvs = QUAD_UVS;
         let text_glyphs = self.font_atlas.queue_text(
             &font.font,
             &text,
-            bounds,
+            rect,
             text.theme.font_size,
             &mut self.texture_atlases,
             &mut self.texture_atlases_images,
@@ -232,9 +278,9 @@ impl UiHandler {
             };
 
             let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
-                transform
+                return transform
                     .transform_point(((quad_pos - Vec2::new(-0.5, -0.5)) * quad_size).extend(0.))
-                    .into()
+                    .into();
             });
 
             for i in 0..QUAD_VERTEX_POSITIONS.len() {

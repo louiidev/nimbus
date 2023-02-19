@@ -3,6 +3,7 @@ use glam::Vec2;
 use crate::{
     color::Color,
     components::text::{Text, TextAlignment, TextTheme},
+    rect::Rect,
     renderer::{RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
     transform::Transform,
     DEFAULT_TEXTURE_ID,
@@ -28,6 +29,13 @@ impl<'a> Widget for Button<'a> {
 
         self.position = ui.get_next_widget_position();
         let size = Vec2::new(150., 50.);
+
+        let rect = Rect::new(
+            self.position.x,
+            self.position.y,
+            self.position.x + size.x,
+            self.position.y + size.y,
+        );
 
         // Need to cache last active to see if we should apply click
         let last_frame_active_id = ui.active_id;
@@ -61,7 +69,7 @@ impl<'a> Widget for Button<'a> {
                     color: self.theme.text_color,
                 },
             },
-            size,
+            rect,
         );
 
         WidgetResponse { clicked }
@@ -134,7 +142,7 @@ impl Default for ButtonTheme {
             text_color: Color::WHITE,
             background_color: Color::BLUE,
             font_id: None,
-            font_size: 16.,
+            font_size: 32.,
         }
     }
 }

@@ -1,12 +1,16 @@
 use ab_glyph::{Font as _, FontArc, ScaleFont as _};
 use ab_glyph::{FontVec, GlyphId, InvalidFont, OutlinedGlyph, PxScale};
-use glam::Vec2;
+use glam::{Vec2, Vec3};
 use glyph_brush_layout::{
-    FontId, GlyphPositioner, Layout, SectionGeometry, SectionGlyph, SectionText,
+    FontId, GlyphPositioner, HorizontalAlign, Layout, SectionGeometry, SectionGlyph, SectionText,
+    VerticalAlign,
 };
 use hashbrown::HashMap;
+use image::DynamicImage;
 use wgpu::{Extent3d, TextureDimension, TextureFormat};
 
+use crate::rect::Rect;
+use crate::transform::Transform;
 use crate::{
     components::text::Text,
     internal_image::Image,
@@ -24,6 +28,7 @@ pub struct PositionedGlyph {
     pub atlas_info: GlyphAtlasInfo,
     pub section_index: usize,
     pub byte_index: usize,
+    pub glyph_transform: Transform,
 }
 
 pub struct Font {
@@ -157,13 +162,14 @@ impl FontAtlasSet {
         &mut self,
         font: &FontArc,
         text: &Text,
-        bounds: Vec2,
+        container: Rect,
         font_size: f32,
         texture_atlases: &mut Assets<TextureAtlas>,
         temp_image_storage: &mut Assets<Image>,
     ) -> Vec<PositionedGlyph> {
         let geom = SectionGeometry {
-            bounds: (bounds.x, bounds.y),
+            bounds: (container.max.x, container.max.y),
+            // screen_position: (container.min.x, container.min.y),
             ..Default::default()
         };
 
@@ -180,19 +186,20 @@ impl FontAtlasSet {
 
         let scaled_font = ab_glyph::Font::as_scaled(&font, font_size);
 
-        let mut min_x = std::f32::MAX;
-        let mut min_y = std::f32::MAX;
-        let mut max_y = std::f32::MIN;
+        let mut min_x: f32 = std::f32::MAX;
+        let mut min_y: f32 = std::f32::MAX;
+        let mut max_x: f32 = std::f32::MIN;
+        let mut max_y: f32 = std::f32::MIN;
+
         for sg in &section_glyphs {
             let glyph = &sg.glyph;
-
             min_x = min_x.min(glyph.position.x);
             min_y = min_y.min(glyph.position.y - scaled_font.ascent());
+            max_x = max_x.max(glyph.position.x + scaled_font.h_advance(glyph.id));
             max_y = max_y.max(glyph.position.y - scaled_font.descent());
         }
-        min_x = min_x.floor();
-        min_y = min_y.floor();
-        max_y = max_y.floor();
+
+        let size = Vec2::new(max_x - min_x, max_y - min_y);
 
         let mut positioned_glyphs = Vec::new();
 
@@ -233,12 +240,30 @@ impl FontAtlasSet {
 
                 let position = Vec2::new(glyph_x, 0.) + Vec2::new(x, y);
 
+                let height = container.height();
+                let width = container.width();
+
+                let alignment_offset = match text.alignment.vertical {
+                    VerticalAlign::Top => Vec3::new(0.0, -height, 0.0),
+                    VerticalAlign::Center => Vec3::new(0.0, -height * 0.5, 0.0),
+                    VerticalAlign::Bottom => Vec3::ZERO,
+                } + match text.alignment.horizontal {
+                    HorizontalAlign::Left => Vec3::ZERO,
+                    HorizontalAlign::Center => Vec3::new(-width * 0.5, 0.0, 0.0),
+                    HorizontalAlign::Right => Vec3::new(-width, 0.0, 0.0),
+                };
+
+                let glyph_transform =
+                    Transform::from_translation(alignment_offset + position.extend(0.));
+                // NOTE: Should match `bevy_ui::render::extract_text_uinodes`
+
                 positioned_glyphs.push(PositionedGlyph {
                     position,
                     size,
                     atlas_info,
                     section_index: sg.section_index,
                     byte_index,
+                    glyph_transform,
                 });
             }
         }
