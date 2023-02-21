@@ -6,7 +6,8 @@ use bevy_ecs::{
 };
 
 use events::{CursorMoved, KeyboardInput, MouseButtonInput, WindowCreated, WindowResized};
-use font::{Font, FontAtlasSet};
+use font::Font;
+use font_atlas::FontAtlasSet;
 use internal_image::{Image, DEFAULT_TEXTURE_FORMAT};
 use renderer::{render_system, texture::Texture, upload_images_to_gpu, Renderer};
 
@@ -48,6 +49,7 @@ pub mod ui;
 pub mod window;
 
 pub mod font;
+mod font_atlas;
 pub mod loaders;
 pub mod utils;
 

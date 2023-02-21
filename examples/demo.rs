@@ -14,13 +14,15 @@ fn test_drawing_ui(mut ui_handler: ResMut<UiHandler>) {
     ui_handler.layout(Vec2::ZERO, 5.0, |ui| {
         if ui
             .button(Button {
-                text: "hello",
+                text: "heell ooooop",
                 ..Default::default()
             })
             .clicked
         {
             dbg!("PRESSED");
         }
+
+        ui.image();
 
         ui.button(Button {
             text: "hello",

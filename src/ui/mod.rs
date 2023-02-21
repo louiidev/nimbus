@@ -5,7 +5,8 @@ use winit::event::MouseButton;
 use crate::{
     color::Color,
     components::text::Text,
-    font::{Font, FontAtlasSet},
+    font::Font,
+    font_atlas::FontAtlasSet,
     internal_image::Image,
     rect::Rect,
     renderer::{RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
@@ -207,6 +208,8 @@ impl UiHandler {
                 image.texture_descriptor.size.height as f32,
             );
 
+            let uvs = QUAD_UVS.map(|uv| Vec2::new(uv.x, 1. - uv.y));
+
             let transform = Transform::from_xyz(position.x, position.y, 1.0);
 
             let mut vertices = Vec::new();
@@ -222,7 +225,7 @@ impl UiHandler {
             for i in 0..QUAD_VERTEX_POSITIONS.len() {
                 vertices.push(UiVertex {
                     position: positions[i],
-                    tex_coords: QUAD_UVS[i].into(),
+                    tex_coords: uvs[i].into(),
                     color: Color::WHITE.as_rgba_f32(),
                 });
             }
@@ -244,7 +247,7 @@ impl UiHandler {
 
     pub fn text(&mut self, text: Text, rect: Rect) {
         let font = self.fonts.get(&DEFAULT_FONT_ID).unwrap();
-        let mut uvs = QUAD_UVS;
+        let mut uvs = QUAD_UVS.map(|uv| Vec2::new(uv.x, 1. - uv.y));
         let text_glyphs = self.font_atlas.queue_text(
             &font.font,
             &text,
