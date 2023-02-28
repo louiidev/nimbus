@@ -83,6 +83,8 @@ impl DynamicTextureAtlasBuilder {
         }
     }
 
+    pub fn finish() {}
+
     pub fn add_texture(
         &mut self,
         texture_atlas: &mut TextureAtlas,

@@ -1,18 +1,20 @@
+use std::f32::{MAX, MIN};
+
 use bevy_ecs::system::Resource;
-use glam::Vec2;
+use glam::{Mat4, Vec2, Vec3, Vec4Swizzles};
 use winit::event::MouseButton;
 
 use crate::{
     color::Color,
     components::text::Text,
     font::Font,
-    font_atlas::FontAtlasSet,
+    font_atlas::{FontAtlasSet, YAxisOrientation},
     internal_image::Image,
     rect::Rect,
     renderer::{RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
     resources::{inputs::InputController, utils::Assets},
     texture_atlas::TextureAtlas,
-    transform::Transform,
+    transform::{GlobalTransform, Transform},
     utils::collision,
     DEFAULT_FONT_ID, DEFAULT_TEXTURE_ID,
 };
@@ -199,63 +201,63 @@ impl UiHandler {
         response
     }
 
-    pub fn image(&mut self) {
-        for (id, image) in self.texture_atlases_images.data.iter() {
-            let position = Vec2::new(200., 200.);
+    pub fn rect(&mut self, rect: Rect) {
+        let size = rect.size();
 
-            let image_size = Vec2::new(
-                image.texture_descriptor.size.width as f32,
-                image.texture_descriptor.size.height as f32,
-            );
+        let transform = Transform::from_xyz(rect.min.x, rect.min.y, 1.0);
 
-            let uvs = QUAD_UVS.map(|uv| Vec2::new(uv.x, 1. - uv.y));
+        let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
+            (transform // offset the center point so it renders top left
+                .transform_point(((quad_pos - Vec2::new(-0.5, -0.5) ) * size).extend(1.)))
+            .into()
+        });
 
-            let transform = Transform::from_xyz(position.x, position.y, 1.0);
+        let mut vertices = Vec::new();
 
-            let mut vertices = Vec::new();
-
-            let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
-                (transform // offset the center point so it renders top left
-                        .transform_point(
-                            ((quad_pos - Vec2::new(-0.5, -0.5)) * image_size).extend(1.),
-                        ))
-                    .into()
+        for i in 0..QUAD_VERTEX_POSITIONS.len() {
+            vertices.push(UiVertex {
+                position: positions[i],
+                tex_coords: QUAD_UVS[i].into(),
+                color: Color::ORANGE_RED.into(),
             });
-
-            for i in 0..QUAD_VERTEX_POSITIONS.len() {
-                vertices.push(UiVertex {
-                    position: positions[i],
-                    tex_coords: uvs[i].into(),
-                    color: Color::WHITE.as_rgba_f32(),
-                });
-            }
-            let last_index = self.current_layout.len() - 1;
-            let layout = self
-                .current_layout
-                .get_mut(last_index)
-                .expect("Button needs to be inside layout to render");
-
-            let meta = RenderBatchMeta {
-                texture_id: *id,
-                vertices,
-                indices: QUAD_INDICES.to_vec(),
-            };
-
-            layout.ui_meta.push(meta);
         }
+
+        let meta = RenderBatchMeta {
+            texture_id: DEFAULT_TEXTURE_ID,
+            vertices,
+            indices: QUAD_INDICES.to_vec(),
+        };
+
+        let layout = self.get_current_layout_mut();
+
+        layout.ui_meta.push(meta);
     }
 
     pub fn text(&mut self, text: Text, rect: Rect) {
         let font = self.fonts.get(&DEFAULT_FONT_ID).unwrap();
-        let mut uvs = QUAD_UVS.map(|uv| Vec2::new(uv.x, 1. - uv.y));
+
         let text_glyphs = self.font_atlas.queue_text(
             &font.font,
             &text,
             rect,
-            text.theme.font_size,
             &mut self.texture_atlases,
             &mut self.texture_atlases_images,
+            YAxisOrientation::TopToBottom,
         );
+
+        let transform = Transform::from_xyz(rect.min.x, rect.min.y, 0.0);
+
+        let mut bounds_rect = Rect {
+            min: Vec2::new(MAX, MAX),
+            max: Vec2::new(MIN, MIN),
+        };
+
+        for glyph in &text_glyphs {
+            bounds_rect.min = bounds_rect.min.min(glyph.bounds.min);
+            bounds_rect.max = bounds_rect.max.max(glyph.bounds.max)
+        }
+
+        let offset = (rect.size() - bounds_rect.size()) / 2.;
 
         for text_glyph in text_glyphs {
             let atlas = self
@@ -264,26 +266,27 @@ impl UiHandler {
                 .unwrap();
 
             let current_image_size = atlas.size;
+            let scale_factor = 1f32;
 
-            let index = text_glyph.atlas_info.glyph_index;
-            let rect = atlas.textures[index];
-            let transform = Transform::from_xyz(text_glyph.position.x, text_glyph.position.y, 1.0);
+            let extracted_transform = transform.compute_matrix()
+                * Mat4::from_scale(Vec3::splat(scale_factor.recip()))
+                * Mat4::from_translation(text_glyph.position.extend(0.) + offset.extend(0.));
+            let rect = text_glyph.rect;
 
             let mut vertices = Vec::new();
 
-            let (uvs, quad_size) = {
-                let rect_size = rect.size();
-                for uv in &mut uvs {
-                    *uv = (rect.min + *uv * rect_size) / current_image_size;
-                }
+            let uvs = [
+                Vec2::new(rect.min.x, rect.min.y),
+                Vec2::new(rect.max.x, rect.min.y),
+                Vec2::new(rect.max.x, rect.max.y),
+                Vec2::new(rect.min.x, rect.max.y),
+            ]
+            .map(|pos| pos / current_image_size);
 
-                (uvs, rect_size)
-            };
-
-            let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
-                return transform
-                    .transform_point(((quad_pos - Vec2::new(-0.5, -0.5)) * quad_size).extend(0.))
-                    .into();
+            let positions = QUAD_VERTEX_POSITIONS.map(|pos| {
+                (extracted_transform * (pos * rect.size()).extend(0.).extend(1.))
+                    .xyx()
+                    .into()
             });
 
             for i in 0..QUAD_VERTEX_POSITIONS.len() {
@@ -304,6 +307,8 @@ impl UiHandler {
 
             layout.ui_meta.push(meta);
         }
+
+        // panic!("testing");
     }
 
     pub fn layout<F>(&mut self, position: Vec2, padding: f32, mut callback: F)

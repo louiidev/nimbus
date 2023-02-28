@@ -28,7 +28,7 @@ impl<'a> Widget for Button<'a> {
         }
 
         self.position = ui.get_next_widget_position();
-        let size = Vec2::new(150., 50.);
+        let size = Vec2::new(250., 100.);
 
         let rect = Rect::new(
             self.position.x,
@@ -62,12 +62,16 @@ impl<'a> Widget for Button<'a> {
 
         ui.text(
             Text {
-                alignment: TextAlignment::default(),
+                alignment: TextAlignment {
+                    vertical: glyph_brush_layout::VerticalAlign::Center,
+                    horizontal: glyph_brush_layout::HorizontalAlign::Center,
+                },
                 value: self.text.to_string(),
                 theme: TextTheme {
                     font_size: self.theme.font_size,
                     color: self.theme.text_color,
                 },
+                ..Default::default()
             },
             rect,
         );
@@ -76,15 +80,13 @@ impl<'a> Widget for Button<'a> {
     }
 
     fn get_render_meta(&self) -> RenderBatchMeta<UiVertex> {
-        let button_size = Vec2::new(150., 50.);
+        let size = Vec2::new(250., 100.);
 
         let transform = Transform::from_xyz(self.position.x, self.position.y, 1.0);
 
-        let mut vertices = Vec::new();
-
         let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
             (transform // offset the center point so it renders top left
-                .transform_point(((quad_pos - Vec2::new(-0.5, -0.5) ) * button_size).extend(1.)))
+                .transform_point(((quad_pos - Vec2::new(-0.5, -0.5) ) * size).extend(1.)))
             .into()
         });
 
@@ -103,6 +105,8 @@ impl<'a> Widget for Button<'a> {
         } else {
             self.theme.background_color
         };
+
+        let mut vertices = Vec::new();
 
         for i in 0..QUAD_VERTEX_POSITIONS.len() {
             vertices.push(UiVertex {

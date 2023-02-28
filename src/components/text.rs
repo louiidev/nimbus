@@ -4,13 +4,26 @@ use glyph_brush_layout::{HorizontalAlign, VerticalAlign};
 use crate::{
     color::Color,
     transform::{GlobalTransform, Transform},
+    DEFAULT_FONT_ID,
 };
 
-#[derive(Default, Debug, Component)]
+#[derive(Debug, Component)]
 pub struct Text {
     pub alignment: TextAlignment,
     pub value: String,
     pub theme: TextTheme,
+    pub font_id: uuid::Uuid,
+}
+
+impl Default for Text {
+    fn default() -> Self {
+        Self {
+            alignment: TextAlignment::default(),
+            value: String::default(),
+            theme: TextTheme::default(),
+            font_id: DEFAULT_FONT_ID,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

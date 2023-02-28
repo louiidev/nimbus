@@ -3,6 +3,7 @@ use ab_glyph::{FontVec, InvalidFont, OutlinedGlyph};
 use glam::Vec2;
 use wgpu::{Extent3d, TextureDimension, TextureFormat};
 
+use crate::rect::Rect;
 use crate::transform::Transform;
 use crate::{internal_image::Image, utils::float_ord::FloatOrd};
 
@@ -16,12 +17,12 @@ pub struct GlyphAtlasInfo {
 
 #[derive(Debug, Clone)]
 pub struct PositionedGlyph {
+    pub bounds: Rect,
     pub position: Vec2,
-    pub size: Vec2,
+    pub rect: Rect,
     pub atlas_info: GlyphAtlasInfo,
     pub section_index: usize,
     pub byte_index: usize,
-    pub glyph_transform: Transform,
 }
 
 pub struct Font {

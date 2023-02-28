@@ -124,7 +124,7 @@ impl App {
         self.add_asset::<Texture>();
         self.add_asset::<TextureAtlas>();
         self.add_asset::<Image>();
-        self.add_asset::<FontAtlasSet>();
+        self.init_resource::<FontAtlasSet>();
         self.add_asset::<Font>();
 
         let image = Image::new_fill(
@@ -136,9 +136,14 @@ impl App {
         self.load_texture_with_id_image(image, DEFAULT_TEXTURE_ID);
 
         let font = font::Font::try_from_bytes(
-            include_bytes!("./default_assets/Roboto-Regular.ttf").to_vec(),
+            include_bytes!("./default_assets/FiraSans-Bold.ttf").to_vec(),
         )
         .unwrap();
+
+        self.load_font_with_id(
+            include_bytes!("./default_assets/FiraSans-Bold.ttf").to_vec(),
+            DEFAULT_FONT_ID,
+        );
 
         let mut ui_handler = self.world.get_resource_mut::<UiHandler>().unwrap();
 

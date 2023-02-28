@@ -4,6 +4,7 @@ use bevy_ecs::{
 };
 
 use glam::Vec2;
+use hashbrown::HashMap;
 use uuid::Uuid;
 use wgpu::{BindGroup, Buffer};
 use winit::window::Window;
@@ -46,6 +47,7 @@ pub struct Renderer {
 pub(crate) mod mesh;
 pub(crate) mod plugin_2d;
 pub(crate) mod sprite_batching;
+pub mod text;
 pub mod texture;
 pub(crate) mod ui;
 
@@ -121,6 +123,7 @@ pub fn upload_images_to_gpu(
     mut ui_handler: ResMut<UiHandler>,
     mut textures: ResMut<Assets<Texture>>,
 ) {
+    let mut textures_to_updated = HashMap::new();
     for (key, image) in ui_handler.texture_atlases_images.data.iter_mut() {
         if image.dirty {
             textures.insert(
@@ -128,8 +131,19 @@ pub fn upload_images_to_gpu(
                 Texture::from_image(&renderer.device, &renderer.queue, image, None),
             );
 
+            textures_to_updated.insert(
+                *key,
+                Vec2::new(
+                    image.texture_descriptor.size.width as f32,
+                    image.texture_descriptor.size.height as f32,
+                ),
+            );
             image.dirty = false;
         }
+    }
+
+    for (key, size) in textures_to_updated.iter() {
+        ui_handler.texture_atlases.get_mut(key).unwrap().size = *size;
     }
 }
 
