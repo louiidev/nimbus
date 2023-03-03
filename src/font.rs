@@ -1,11 +1,9 @@
-use ab_glyph::FontArc;
-use ab_glyph::{FontVec, InvalidFont, OutlinedGlyph};
-use glam::Vec2;
-use wgpu::{Extent3d, TextureDimension, TextureFormat};
-
 use crate::rect::Rect;
 use crate::transform::Transform;
 use crate::{internal_image::Image, utils::float_ord::FloatOrd};
+use fontdue::{Font, FontResult, Metrics};
+use glam::Vec2;
+use wgpu::{Extent3d, TextureDimension, TextureFormat};
 
 pub type FontSizeKey = FloatOrd;
 
@@ -13,53 +11,43 @@ pub type FontSizeKey = FloatOrd;
 pub struct GlyphAtlasInfo {
     pub texture_atlas_id: uuid::Uuid,
     pub glyph_index: usize,
+    pub metrics: Metrics,
 }
 
 #[derive(Debug, Clone)]
 pub struct PositionedGlyph {
-    pub bounds: Rect,
     pub position: Vec2,
     pub rect: Rect,
     pub atlas_info: GlyphAtlasInfo,
-    pub section_index: usize,
-    pub byte_index: usize,
 }
 
-pub struct Font {
-    pub font: FontArc,
+pub struct FontData {
+    pub font: Font,
 }
 
-impl Font {
-    pub fn try_from_bytes(font_data: Vec<u8>) -> Result<Self, InvalidFont> {
-        let font = FontVec::try_from_vec(font_data)?;
-        let font = FontArc::new(font);
-        Ok(Font { font })
+impl FontData {
+    pub fn try_from_bytes(font_Data: &[u8]) -> FontResult<Self> {
+        let font = fontdue::Font::from_bytes(font_Data, fontdue::FontSettings::default())?;
+        Ok(FontData { font })
     }
 
-    pub fn get_outlined_glyph_texture(outlined_glyph: &OutlinedGlyph) -> Image {
-        let bounds = outlined_glyph.px_bounds();
-        let width = bounds.width() as usize;
-        let height = bounds.height() as usize;
-        let mut alpha = vec![0.0; width * height];
-        outlined_glyph.draw(|x, y, v| {
-            alpha[y as usize * width + x as usize] = v;
-        });
-
-        // TODO: make this texture grayscale
+    pub fn rasterize(&self, character: char, font_size: f32) -> (Metrics, Image) {
+        let (metrics, bitmap) = self.font.rasterize(character, font_size);
+        dbg!(character, metrics);
         let image = Image::new(
             Extent3d {
-                width: width as u32,
-                height: height as u32,
+                width: metrics.width as _,
+                height: metrics.height as _,
                 depth_or_array_layers: 1,
             },
             TextureDimension::D2,
-            alpha
+            bitmap
                 .iter()
-                .flat_map(|a| vec![255, 255, 255, (*a * 255.0) as u8])
+                .flat_map(|a| vec![255, 255, 255, (*a)])
                 .collect::<Vec<u8>>(),
             TextureFormat::Rgba8UnormSrgb,
         );
 
-        image
+        (metrics, image)
     }
 }

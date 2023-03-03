@@ -10,7 +10,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID},
     components::text::Text,
-    font::Font,
+    font::FontData,
     font_atlas::FontAtlasSet,
     internal_image::Image,
     rect::Rect,
@@ -33,7 +33,7 @@ pub fn prepare_text_for_batching(
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
     textures: ResMut<Assets<Texture>>,
     mut images: ResMut<Assets<Image>>,
-    fonts: Res<Assets<Font>>,
+    fonts: Res<Assets<FontData>>,
     sprite_pipeline: Res<SpritePipeline>,
     default_sampler: Res<DefaultImageSampler>,
     mut sprite_batch: ResMut<ResourceVec<RenderBatchItem>>,
@@ -80,16 +80,14 @@ pub fn prepare_text_for_batching(
     let mut batches: Vec<RenderBatchMeta<Vertex>> = Vec::new();
 
     for (text, transform) in text_query.iter() {
-        let mut uvs = QUAD_UVS;
-
         let font = fonts.get(&text.font_id).unwrap();
         let text_glyphs = font_atlas_set.queue_text(
-            &font.font,
+            &font,
             text,
             Rect::default(),
             &mut texture_atlases,
             &mut images,
-            crate::font_atlas::YAxisOrientation::BottomToTop,
+            fontdue::layout::CoordinateSystem::PositiveYDown,
         );
 
         for text_glyph in text_glyphs {

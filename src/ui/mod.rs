@@ -7,8 +7,8 @@ use winit::event::MouseButton;
 use crate::{
     color::Color,
     components::text::Text,
-    font::Font,
-    font_atlas::{FontAtlasSet, YAxisOrientation},
+    font::FontData,
+    font_atlas::FontAtlasSet,
     internal_image::Image,
     rect::Rect,
     renderer::{RenderBatchMeta, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
@@ -87,7 +87,7 @@ pub struct UiHandler {
     pub active_id: Option<Id>,
     pub hover_id: Option<Id>,
     pub font_atlas: FontAtlasSet,
-    pub(crate) fonts: Assets<Font>,
+    pub(crate) fonts: Assets<FontData>,
 }
 
 impl Default for UiHandler {
@@ -237,27 +237,15 @@ impl UiHandler {
         let font = self.fonts.get(&DEFAULT_FONT_ID).unwrap();
 
         let text_glyphs = self.font_atlas.queue_text(
-            &font.font,
+            &font,
             &text,
             rect,
             &mut self.texture_atlases,
             &mut self.texture_atlases_images,
-            YAxisOrientation::TopToBottom,
+            fontdue::layout::CoordinateSystem::PositiveYDown,
         );
 
         let transform = Transform::from_xyz(rect.min.x, rect.min.y, 0.0);
-
-        let mut bounds_rect = Rect {
-            min: Vec2::new(MAX, MAX),
-            max: Vec2::new(MIN, MIN),
-        };
-
-        for glyph in &text_glyphs {
-            bounds_rect.min = bounds_rect.min.min(glyph.bounds.min);
-            bounds_rect.max = bounds_rect.max.max(glyph.bounds.max)
-        }
-
-        let offset = (rect.size() - bounds_rect.size()) / 2.;
 
         for text_glyph in text_glyphs {
             let atlas = self
@@ -270,7 +258,7 @@ impl UiHandler {
 
             let extracted_transform = transform.compute_matrix()
                 * Mat4::from_scale(Vec3::splat(scale_factor.recip()))
-                * Mat4::from_translation(text_glyph.position.extend(0.) + offset.extend(0.));
+                * Mat4::from_translation(text_glyph.position.extend(0.));
             let rect = text_glyph.rect;
 
             let mut vertices = Vec::new();
@@ -284,9 +272,12 @@ impl UiHandler {
             .map(|pos| pos / current_image_size);
 
             let positions = QUAD_VERTEX_POSITIONS.map(|pos| {
-                (extracted_transform * (pos * rect.size()).extend(0.).extend(1.))
-                    .xyx()
-                    .into()
+                (extracted_transform
+                    * ((pos - Vec2::new(-0.5, -0.5)) * rect.size())
+                        .extend(0.)
+                        .extend(1.))
+                .xyx()
+                .into()
             });
 
             for i in 0..QUAD_VERTEX_POSITIONS.len() {

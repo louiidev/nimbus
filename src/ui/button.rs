@@ -1,3 +1,4 @@
+use fontdue::layout::{HorizontalAlign, VerticalAlign};
 use glam::Vec2;
 
 use crate::{
@@ -63,8 +64,8 @@ impl<'a> Widget for Button<'a> {
         ui.text(
             Text {
                 alignment: TextAlignment {
-                    vertical: glyph_brush_layout::VerticalAlign::Center,
-                    horizontal: glyph_brush_layout::HorizontalAlign::Center,
+                    vertical: VerticalAlign::Middle,
+                    horizontal: HorizontalAlign::Center,
                 },
                 value: self.text.to_string(),
                 theme: TextTheme {

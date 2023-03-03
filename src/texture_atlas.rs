@@ -95,6 +95,8 @@ impl DynamicTextureAtlasBuilder {
             image.texture_descriptor.size.width as i32 + self.padding,
             image.texture_descriptor.size.height as i32 + self.padding,
         ));
+
+        dbg!(image.texture_descriptor.size);
         if let Some(allocation) = allocation {
             let atlas_texture = textures.get_mut(&texture_atlas.texture_id).unwrap();
             self.place_texture(atlas_texture, allocation, image);
@@ -108,6 +110,7 @@ impl DynamicTextureAtlasBuilder {
 
     fn place_texture(&mut self, atlas_image: &mut Image, allocation: Allocation, image: &Image) {
         let mut rect = allocation.rectangle;
+        dbg!(rect);
         rect.max.x -= self.padding;
         rect.max.y -= self.padding;
         let atlas_width = atlas_image.texture_descriptor.size.width as usize;

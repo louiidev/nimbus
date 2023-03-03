@@ -6,7 +6,7 @@ use bevy_ecs::{
 };
 
 use events::{CursorMoved, KeyboardInput, MouseButtonInput, WindowCreated, WindowResized};
-use font::Font;
+use font::FontData;
 use font_atlas::FontAtlasSet;
 use internal_image::{Image, DEFAULT_TEXTURE_FORMAT};
 use renderer::{render_system, texture::Texture, upload_images_to_gpu, Renderer};
@@ -125,7 +125,7 @@ impl App {
         self.add_asset::<TextureAtlas>();
         self.add_asset::<Image>();
         self.init_resource::<FontAtlasSet>();
-        self.add_asset::<Font>();
+        self.add_asset::<FontData>();
 
         let image = Image::new_fill(
             Extent3d::default(),
@@ -135,13 +135,11 @@ impl App {
         );
         self.load_texture_with_id_image(image, DEFAULT_TEXTURE_ID);
 
-        let font = font::Font::try_from_bytes(
-            include_bytes!("./default_assets/FiraSans-Bold.ttf").to_vec(),
-        )
-        .unwrap();
+        let font =
+            FontData::try_from_bytes(include_bytes!("./default_assets/FiraSans-Bold.ttf")).unwrap();
 
         self.load_font_with_id(
-            include_bytes!("./default_assets/FiraSans-Bold.ttf").to_vec(),
+            include_bytes!("./default_assets/FiraSans-Bold.ttf"),
             DEFAULT_FONT_ID,
         );
 

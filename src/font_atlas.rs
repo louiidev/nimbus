@@ -1,20 +1,13 @@
 use bevy_ecs::system::Resource;
+use fontdue::layout::{CoordinateSystem, Layout, LayoutSettings, TextStyle};
+use fontdue::Metrics;
+use glam::Vec2;
 use hashbrown::HashMap;
-
-use ab_glyph::{Font as _, FontArc, ScaleFont as _};
-use ab_glyph::{GlyphId, OutlinedGlyph, PxScale};
-use glam::{Vec2, Vec3};
-use glyph_brush_layout::{
-    FontId, GlyphPositioner, HorizontalAlign, Layout, SectionGeometry, SectionGlyph, SectionText,
-    VerticalAlign,
-};
 
 use wgpu::{Extent3d, TextureDimension, TextureFormat};
 
-use crate::components::text::TextAlignment;
-use crate::font::{Font, FontSizeKey, GlyphAtlasInfo, PositionedGlyph};
+use crate::font::{FontData, FontSizeKey, GlyphAtlasInfo, PositionedGlyph};
 use crate::rect::Rect;
-use crate::transform::Transform;
 use crate::{
     components::text::Text,
     internal_image::Image,
@@ -25,7 +18,7 @@ use crate::{
 
 pub struct FontAtlas {
     pub dynamic_texture_atlas_builder: DynamicTextureAtlasBuilder,
-    pub glyph_to_atlas_index: HashMap<GlyphId, usize>,
+    pub glyph_atlas_info: HashMap<char, (usize, Metrics)>,
     pub texture_atlas_id: uuid::Uuid,
 }
 
@@ -51,35 +44,34 @@ impl FontAtlas {
 
         Self {
             texture_atlas_id: atlas_texture_id,
-            glyph_to_atlas_index: HashMap::default(),
+            glyph_atlas_info: HashMap::default(),
             dynamic_texture_atlas_builder: DynamicTextureAtlasBuilder::new(size, 1),
         }
     }
 
-    pub fn get_glyph_index(&self, glyph_id: GlyphId) -> Option<usize> {
-        self.glyph_to_atlas_index.get(&glyph_id).copied()
+    pub fn get_glyph_index(&self, glyph_id: char) -> Option<(usize, Metrics)> {
+        self.glyph_atlas_info.get(&glyph_id).copied()
     }
 
-    pub fn has_glyph(&self, glyph_id: GlyphId) -> bool {
-        self.glyph_to_atlas_index.contains_key(&glyph_id)
+    pub fn has_glyph(&self, character: char) -> bool {
+        self.glyph_atlas_info.contains_key(&character)
     }
 
     pub fn add_glyph(
         &mut self,
         images: &mut Assets<Image>,
         texture_atlases: &mut Assets<TextureAtlas>,
-        glyph_id: GlyphId,
+        glyph: char,
         image: &Image,
-    ) -> bool {
+        glyph_metrics: Metrics,
+    ) {
         let texture_atlas = texture_atlases.get_mut(&self.texture_atlas_id).unwrap();
+
         if let Some(index) =
             self.dynamic_texture_atlas_builder
                 .add_texture(texture_atlas, images, image)
         {
-            self.glyph_to_atlas_index.insert(glyph_id, index);
-            true
-        } else {
-            false
+            self.glyph_atlas_info.insert(glyph, (index, glyph_metrics));
         }
     }
 }
@@ -97,178 +89,102 @@ impl Default for FontAtlasSet {
     }
 }
 
-pub enum YAxisOrientation {
-    BottomToTop,
-    TopToBottom,
-}
-
 impl FontAtlasSet {
-    pub fn has_glyph(&self, glyph_id: GlyphId, font_size: f32) -> bool {
+    pub fn has_glyph(&self, glyph: char, font_size: f32) -> bool {
         self.font_atlases
             .get(&FloatOrd(font_size))
             .unwrap()
-            .has_glyph(glyph_id)
+            .has_glyph(glyph)
+    }
+
+    pub fn add_glyphs_to_atlas(
+        &mut self,
+        font: &FontData,
+        texture_atlases: &mut Assets<TextureAtlas>,
+        images: &mut Assets<Image>,
+        text: &str,
+        font_size: f32,
+    ) {
+        let font_atlas = self
+            .font_atlases
+            .entry(FloatOrd(font_size))
+            .or_insert_with(|| FontAtlas::new(images, texture_atlases, Vec2::splat(512.0)));
+
+        for character in text.chars() {
+            if (!font_atlas.has_glyph(character)) {
+                let (metrics, bitmap) = font.rasterize(character, font_size);
+                font_atlas.add_glyph(images, texture_atlases, character, &bitmap, metrics);
+            }
+        }
     }
 
     pub fn queue_text(
         &mut self,
-        font: &FontArc,
+        font: &FontData,
         text: &Text,
         container: Rect,
         texture_atlases: &mut Assets<TextureAtlas>,
         temp_image_storage: &mut Assets<Image>,
-        y_axis_orientation: YAxisOrientation,
+        y_axis_orientation: CoordinateSystem,
     ) -> Vec<PositionedGlyph> {
-        let geom = SectionGeometry {
-            bounds: (container.max.x, container.max.y),
-            screen_position: (container.min.x, container.min.y),
-        };
-
-        let section = SectionText {
-            font_id: FontId(0),
-            scale: PxScale::from(text.theme.font_size),
-            text: &text.value,
-        };
-
-        let section_glyphs = Layout::default()
-            .h_align(HorizontalAlign::Left)
-            .v_align(VerticalAlign::Top)
-            .calculate_glyphs(&[font], &geom, &[section]);
-
-        let scaled_font = ab_glyph::Font::as_scaled(&font, text.theme.font_size);
+        self.add_glyphs_to_atlas(
+            &font,
+            texture_atlases,
+            temp_image_storage,
+            &text.value,
+            text.theme.font_size,
+        );
 
         let mut positioned_glyphs = Vec::new();
 
-        let mut min_x = std::f32::MAX;
-        let mut min_y = std::f32::MAX;
-        let mut max_y = std::f32::MIN;
-        let mut max_x = std::f32::MIN;
-        for sg in &section_glyphs {
-            let glyph = &sg.glyph;
+        let mut layout = Layout::new(y_axis_orientation);
 
-            min_x = min_x.min(glyph.position.x);
-            min_y = min_y.min(glyph.position.y - scaled_font.ascent());
-            max_y = max_y.max(glyph.position.y - scaled_font.descent());
-            max_x = max_x.max(glyph.position.x);
+        layout.reset(&LayoutSettings {
+            x: 0.0,
+            y: 0.0,
+            max_width: Some(container.max.x - container.min.x),
+            max_height: Some(container.max.y - container.min.y),
+            horizontal_align: text.alignment.horizontal,
+            vertical_align: text.alignment.vertical,
+            ..Default::default()
+        });
+
+        layout.append(
+            &[&font.font],
+            &TextStyle::new(&text.value, text.theme.font_size, 0),
+        );
+
+        dbg!(layout.lines());
+
+        for glyph in layout.glyphs() {
+            let atlas_info = self
+                .get_glyph_atlas_info(text.theme.font_size, glyph.parent)
+                .unwrap();
+            let texture_atlas = texture_atlases.get(&atlas_info.texture_atlas_id).unwrap();
+
+            positioned_glyphs.push(PositionedGlyph {
+                position: Vec2::new(glyph.x, glyph.y),
+                rect: texture_atlas.textures[atlas_info.glyph_index],
+                atlas_info,
+            });
         }
-        min_x = min_x.floor();
-        min_y = min_y.floor();
-        max_y = max_y.floor();
-        max_x = max_x.floor();
-
-        for sg in section_glyphs {
-            let SectionGlyph {
-                section_index: _,
-                byte_index,
-                mut glyph,
-                font_id: _,
-            } = sg;
-            let glyph_id = glyph.id;
-
-            let adjust_value = glyph.position.x.round();
-
-            glyph.position.y = glyph.position.y.ceil();
-
-            let position = Vec2::new(adjust_value, 0.);
-
-            let p = glyph.position.clone();
-
-            if let Some(outlined_glyph) = font.outline_glyph(glyph) {
-                let bounds = outlined_glyph.px_bounds();
-
-                let atlas_info = self
-                    .get_glyph_atlas_info(text.theme.font_size, glyph_id)
-                    .map(Ok)
-                    .unwrap_or_else(|| {
-                        self.add_glyph_to_atlas(outlined_glyph, texture_atlases, temp_image_storage)
-                    })
-                    .unwrap();
-                let texture_atlas = texture_atlases.get(&atlas_info.texture_atlas_id).unwrap();
-                let size = Vec2::new(bounds.width(), bounds.height());
-
-                let x = size.x / 2.0 - min_x;
-
-                let y = match y_axis_orientation {
-                    YAxisOrientation::BottomToTop => max_y - bounds.max.y + size.y / 2.0,
-                    YAxisOrientation::TopToBottom => bounds.min.y + size.y / 2.0 - min_y,
-                };
-
-                let position = position + Vec2::new(x, y);
-
-                positioned_glyphs.push(PositionedGlyph {
-                    bounds: Rect {
-                        min: Vec2::new(bounds.min.x, bounds.min.y),
-                        max: Vec2::new(bounds.max.x, bounds.max.y),
-                    },
-                    position,
-                    rect: texture_atlas.textures[atlas_info.glyph_index],
-                    atlas_info,
-                    section_index: sg.section_index,
-                    byte_index,
-                });
-            }
-        }
-
-        let atlas = self
-            .font_atlases
-            .get(&FloatOrd(text.theme.font_size))
-            .unwrap();
 
         positioned_glyphs
     }
 
-    pub fn add_glyph_to_atlas(
-        &mut self,
-        outlined_glyph: OutlinedGlyph,
-        texture_atlases: &mut Assets<TextureAtlas>,
-        temp_image_storage: &mut Assets<Image>,
-    ) -> Result<GlyphAtlasInfo, TextError> {
-        let glyph = outlined_glyph.glyph(); // FUTURE CHECK used to be shared ref, why can't we clone?
-
-        let font_size = glyph.scale.y;
-
-        let font_atlases = self
-            .font_atlases
-            .entry(FloatOrd(font_size))
-            .or_insert_with(|| {
-                FontAtlas::new(temp_image_storage, texture_atlases, Vec2::splat(512.0))
-            });
-
-        let glyph_texture = Font::get_outlined_glyph_texture(&outlined_glyph);
-
-        if !font_atlases.add_glyph(
-            temp_image_storage,
-            texture_atlases,
-            glyph.id,
-            &glyph_texture,
-        ) {
-            return Err(TextError::FailedToAddGlyph(glyph.id));
-        }
-        Ok(self.get_glyph_atlas_info(font_size, glyph.id).unwrap())
-    }
-
-    pub fn get_glyph_atlas_info(
-        &mut self,
-        font_size: f32,
-        glyph_id: GlyphId,
-    ) -> Option<GlyphAtlasInfo> {
+    pub fn get_glyph_atlas_info(&mut self, font_size: f32, glyph: char) -> Option<GlyphAtlasInfo> {
         let atlas = self.font_atlases.get(&FloatOrd(font_size));
 
         if let Some(atlas) = atlas {
             return atlas
-                .get_glyph_index(glyph_id)
-                .map(|glyph_index| GlyphAtlasInfo {
+                .get_glyph_index(glyph)
+                .map(|(glyph_index, metrics)| GlyphAtlasInfo {
                     texture_atlas_id: atlas.texture_atlas_id,
                     glyph_index,
+                    metrics,
                 });
         }
 
         None
     }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum TextError {
-    NoSuchFont,
-    FailedToAddGlyph(GlyphId),
 }

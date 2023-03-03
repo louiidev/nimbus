@@ -15,7 +15,7 @@ fn test_drawing_ui(mut ui_handler: ResMut<UiHandler>) {
     ui_handler.layout(Vec2::new(250., 500.), 15.0, |ui| {
         if ui
             .button(Button {
-                text: "Hello World",
+                text: "It's a button",
                 ..Default::default()
             })
             .clicked
@@ -26,7 +26,7 @@ fn test_drawing_ui(mut ui_handler: ResMut<UiHandler>) {
         // ui.image();
 
         ui.button(Button {
-            text: "hello",
+            text: "Press me",
             ..Default::default()
         });
     });
@@ -93,7 +93,7 @@ fn main() {
     };
 
     app.add_system(test_drawing_ui)
-        .spawn_bundle(sprite_bundle)
+        // .spawn_bundle(sprite_bundle)
         // .add_system(test_drawing_ui)
         .run();
 }
