@@ -1,19 +1,32 @@
 use bevy_ecs::prelude::{Bundle, Component};
-use glyph_brush_layout::{HorizontalAlign, VerticalAlign};
+use fontdue::layout::{HorizontalAlign, VerticalAlign};
 
 use crate::{
     color::Color,
     transform::{GlobalTransform, Transform},
+    DEFAULT_FONT_ID,
 };
 
-#[derive(Default, Debug, Component)]
+#[derive(Component)]
 pub struct Text {
     pub alignment: TextAlignment,
     pub value: String,
     pub theme: TextTheme,
+    pub font_id: uuid::Uuid,
 }
 
-#[derive(Debug, Clone, Copy)]
+impl Default for Text {
+    fn default() -> Self {
+        Self {
+            alignment: TextAlignment::default(),
+            value: String::default(),
+            theme: TextTheme::default(),
+            font_id: DEFAULT_FONT_ID,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct TextAlignment {
     pub vertical: VerticalAlign,
     pub horizontal: HorizontalAlign,
@@ -28,7 +41,7 @@ impl Default for TextAlignment {
     }
 }
 
-#[derive(Bundle, Default, Debug)]
+#[derive(Bundle, Default)]
 pub struct TextBundle {
     pub text: Text,
     pub transform: Transform,

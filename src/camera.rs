@@ -155,24 +155,13 @@ impl OrthographicProjection {
             self.right * self.scale,
             self.bottom * self.scale,
             self.top * self.scale,
-            // NOTE: near and far are swapped to invert the depth range from [0,1] to [1,0]
-            // This is for interoperability with pipelines using infinite reverse perspective projections.
-            self.far,
             self.near,
+            self.far,
         )
     }
 
     fn get_projection_matrix_ui(logical_size: Vec2) -> Mat4 {
-        Mat4::orthographic_rh(
-            0.0,
-            logical_size.x,
-            logical_size.y,
-            0.0,
-            // NOTE: near and far are swapped to invert the depth range from [0,1] to [1,0]
-            // This is for interoperability with pipelines using infinite reverse perspective projections.
-            0.0,
-            1000.,
-        )
+        Mat4::orthographic_rh(0.0, logical_size.x, logical_size.y, 0.0, 0.0, 1000.)
     }
 
     fn update(&mut self, width: f32, height: f32) {
@@ -309,6 +298,7 @@ impl Camera {
 
     pub fn projection_matrix_ui(&self, logical_window_size: Vec2) -> Mat4 {
         OrthographicProjection::get_projection_matrix_ui(logical_window_size)
+        // self.orthographic_projection.get_projection_matrix()
     }
 
     /// Converts a physical size in this `Camera` to a logical size.

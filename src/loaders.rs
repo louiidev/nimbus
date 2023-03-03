@@ -1,7 +1,7 @@
-use ab_glyph::InvalidFont;
+use fontdue::FontResult;
 
 use crate::{
-    font::{self, Font},
+    font::{self, FontData},
     internal_image::Image,
     renderer::{texture::Texture, Renderer},
     resources::utils::Assets,
@@ -37,17 +37,17 @@ impl App {
 
     pub fn load_font_with_id(
         &mut self,
-        font_data: Vec<u8>,
+        font_data: &[u8],
         id: uuid::Uuid,
-    ) -> Result<uuid::Uuid, InvalidFont> {
-        let font = font::Font::try_from_bytes(font_data)?;
+    ) -> FontResult<uuid::Uuid> {
+        let font = font::FontData::try_from_bytes(font_data)?;
 
-        let mut fonts = self.world.get_resource_mut::<Assets<Font>>().unwrap();
+        let mut fonts = self.world.get_resource_mut::<Assets<FontData>>().unwrap();
         let _ = fonts.insert(id, font);
         Ok(id)
     }
 
-    pub fn load_font(&mut self, font_data: Vec<u8>) -> Result<uuid::Uuid, InvalidFont> {
+    pub fn load_font(&mut self, font_data: &[u8]) -> FontResult<uuid::Uuid> {
         self.load_font_with_id(font_data, uuid::Uuid::new_v4())
     }
 }

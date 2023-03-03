@@ -1,38 +1,47 @@
 use std::sync::Arc;
 
-use bevy_ecs::system::{Query, Res, ResMut};
+use bevy_ecs::{
+    query::Without,
+    system::{Query, Res, ResMut},
+};
 use glam::Vec2;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID},
+    camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID},
+    components::text::Text,
+    font::FontData,
+    font_atlas::FontAtlasSet,
+    internal_image::Image,
+    rect::Rect,
     resources::utils::{Assets, ResourceVec},
+    texture_atlas::TextureAtlas,
     transform::GlobalTransform,
-    ui::{UiHandler, UiVertex},
-    App, CoreStage,
 };
 
 use super::{
     plugin_2d::{DefaultImageSampler, SpritePipeline},
     texture::Texture,
-    RenderBatchItem, RenderBatchMeta, Renderer,
+    RenderBatchItem, RenderBatchMeta, Renderer, Vertex, QUAD_INDICES, QUAD_UVS,
+    QUAD_VERTEX_POSITIONS,
 };
 
-pub fn prepare_ui_for_batching(
-    mut ui_handler: ResMut<UiHandler>,
+pub fn prepare_text_for_batching(
+    text_query: Query<(&Text, &mut GlobalTransform), Without<Camera>>,
     renderer: Res<Renderer>,
-    sprite_assets: Res<Assets<Texture>>,
+    mut font_atlas_set: ResMut<FontAtlasSet>,
+    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
+    textures: ResMut<Assets<Texture>>,
+    mut images: ResMut<Assets<Image>>,
+    fonts: Res<Assets<FontData>>,
     sprite_pipeline: Res<SpritePipeline>,
     default_sampler: Res<DefaultImageSampler>,
-    mut layout_batches: ResMut<ResourceVec<RenderBatchItem>>,
-    mut camera: Query<(&mut Camera, &mut GlobalTransform)>,
+    mut sprite_batch: ResMut<ResourceVec<RenderBatchItem>>,
+    mut camera: Query<(&mut Camera, &mut GlobalTransform), Without<Text>>,
 ) {
     let (mut camera, global_transform) = camera.get_single_mut().unwrap();
 
-    let projection = camera.projection_matrix_ui(Vec2::new(
-        renderer.size.width as f32,
-        renderer.size.height as f32,
-    ));
+    let projection = camera.projection_matrix();
 
     let view = global_transform.compute_matrix();
     let inverse_view = view.inverse();
@@ -62,40 +71,71 @@ pub fn prepare_ui_for_batching(
         });
 
     camera.bind_groups.insert(
-        ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID,
+        ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID,
         Arc::new(camera_bind_group),
     );
 
     let mut current_batch_texture_id = uuid::Uuid::new_v4();
 
-    let mut batches: Vec<RenderBatchMeta<UiVertex>> = Vec::new();
+    let mut batches: Vec<RenderBatchMeta<Vertex>> = Vec::new();
 
-    let layout_meta = ui_handler.queued_layouts.drain(..);
+    for (text, transform) in text_query.iter() {
+        let font = fonts.get(&text.font_id).unwrap();
+        let text_glyphs = font_atlas_set.queue_text(
+            &font,
+            text,
+            Rect::default(),
+            &mut texture_atlases,
+            &mut images,
+            fontdue::layout::CoordinateSystem::PositiveYDown,
+        );
 
-    for layout in layout_meta {
-        if current_batch_texture_id == layout.texture_id {
-            let length = batches.len();
+        for text_glyph in text_glyphs {
+            let mut vertices = Vec::new();
+            let atlas = texture_atlases
+                .get(&text_glyph.atlas_info.texture_atlas_id)
+                .unwrap();
 
-            let current = &mut batches[length - 1];
-            let vert_count = current.vertices.len() as u16;
-            let indices = layout
-                .indices
-                .iter()
-                .map(|index| index + vert_count)
-                .collect();
+            let current_image_size = atlas.size;
 
-            current.update(layout.vertices, indices);
-        } else {
-            current_batch_texture_id = layout.texture_id;
-            batches.push(RenderBatchMeta::new(
-                layout.texture_id,
-                layout.vertices,
-                layout.indices,
-            ));
+            let uvs = QUAD_UVS.map(|pos| pos / current_image_size);
+
+            let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
+                transform
+                    .transform_point(
+                        ((quad_pos - Vec2::new(-0.5, -0.5)) * text_glyph.rect.size()).extend(0.),
+                    )
+                    .into()
+            });
+
+            for i in 0..QUAD_VERTEX_POSITIONS.len() {
+                vertices.push(Vertex {
+                    position: positions[i],
+                    uv: uvs[i].into(),
+                    color: text.theme.color.as_rgba_f32(),
+                });
+            }
+
+            if current_batch_texture_id == text_glyph.atlas_info.texture_atlas_id {
+                let length = batches.len();
+
+                let current = &mut batches[length - 1];
+                let vert_count = current.vertices.len() as u16;
+                let indices = QUAD_INDICES.map(|index| index + vert_count);
+
+                current.update(vertices, indices.to_vec());
+            } else {
+                current_batch_texture_id = text_glyph.atlas_info.texture_atlas_id;
+                batches.push(RenderBatchMeta::new(
+                    text_glyph.atlas_info.texture_atlas_id,
+                    vertices,
+                    QUAD_INDICES.to_vec(),
+                ));
+            }
         }
     }
 
-    let mut batches: Vec<RenderBatchItem> = batches
+    let mut sprite_batches: Vec<RenderBatchItem> = batches
         .iter()
         .map(|batch| {
             let vertex_buffer =
@@ -116,10 +156,7 @@ pub fn prepare_ui_for_batching(
                         usage: wgpu::BufferUsages::INDEX,
                     });
 
-            let texture = sprite_assets
-                .data
-                .get(&batch.texture_id)
-                .expect(&format!("Missing texture id = {}", &batch.texture_id));
+            let texture = textures.data.get(&batch.texture_id).unwrap();
 
             let texture_bind_group =
                 renderer
@@ -144,19 +181,10 @@ pub fn prepare_ui_for_batching(
                 index_buffer,
                 texture_bind_group,
                 indices_len: batch.indices.len() as _,
-                camera_bind_group_id: ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID,
+                camera_bind_group_id: ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID,
             }
         })
         .collect();
 
-    layout_batches.values.append(&mut batches);
-}
-
-impl App {
-    pub fn init_ui_renderer(mut self) -> Self {
-        self.schedule
-            .add_system_to_stage(CoreStage::PrepareRenderer, prepare_ui_for_batching);
-
-        self
-    }
+    sprite_batch.values.append(&mut sprite_batches);
 }

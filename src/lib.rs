@@ -6,9 +6,10 @@ use bevy_ecs::{
 };
 
 use events::{CursorMoved, KeyboardInput, MouseButtonInput, WindowCreated, WindowResized};
-use font::FontAtlasSet;
+use font::FontData;
+use font_atlas::FontAtlasSet;
 use internal_image::{Image, DEFAULT_TEXTURE_FORMAT};
-use renderer::{render_system, renderable::RenderCache, texture::Texture, Renderer};
+use renderer::{render_system, texture::Texture, upload_images_to_gpu, Renderer};
 
 use resources::{
     inputs::{input_system, InputController},
@@ -29,6 +30,9 @@ use winit::{
 pub const DEFAULT_TEXTURE_ID: uuid::Uuid =
     uuid::Uuid::from_u128(0xa1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d8u128);
 
+pub const DEFAULT_FONT_ID: uuid::Uuid =
+    uuid::Uuid::from_u128(0xa1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d9u128);
+
 pub mod camera;
 pub mod color;
 pub mod components;
@@ -45,6 +49,7 @@ pub mod ui;
 pub mod window;
 
 pub mod font;
+mod font_atlas;
 pub mod loaders;
 pub mod utils;
 
@@ -119,7 +124,8 @@ impl App {
         self.add_asset::<Texture>();
         self.add_asset::<TextureAtlas>();
         self.add_asset::<Image>();
-        self.add_asset::<FontAtlasSet>();
+        self.init_resource::<FontAtlasSet>();
+        self.add_asset::<FontData>();
 
         let image = Image::new_fill(
             Extent3d::default(),
@@ -128,6 +134,19 @@ impl App {
             DEFAULT_TEXTURE_FORMAT,
         );
         self.load_texture_with_id_image(image, DEFAULT_TEXTURE_ID);
+
+        let font =
+            FontData::try_from_bytes(include_bytes!("./default_assets/FiraSans-Bold.ttf")).unwrap();
+
+        self.load_font_with_id(
+            include_bytes!("./default_assets/FiraSans-Bold.ttf"),
+            DEFAULT_FONT_ID,
+        )
+        .expect("Default font failed to load");
+
+        let mut ui_handler = self.world.get_resource_mut::<UiHandler>().unwrap();
+
+        ui_handler.fonts.insert(DEFAULT_FONT_ID, font);
 
         self
     }
@@ -138,12 +157,11 @@ impl App {
 
         self.init_resource::<Time>();
 
-        self.init_resource::<RenderCache>();
-
         self.add_system_to_stage(render_system, CoreStage::Render)
             .add_system_to_stage(transform_propagate_system, CoreStage::PostUpdate)
             .add_system_to_stage(crate::camera::camera_system, CoreStage::PostUpdate)
             .add_system_to_stage(input_system, CoreStage::PreUpdate)
+            .add_system_to_stage(upload_images_to_gpu, CoreStage::PostUpdate)
             .init_2d_renderer()
             .init_ui_renderer()
     }
