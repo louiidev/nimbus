@@ -1,5 +1,4 @@
 use crate::rect::Rect;
-use crate::transform::Transform;
 use crate::{internal_image::Image, utils::float_ord::FloatOrd};
 use fontdue::{Font, FontResult, Metrics};
 use glam::Vec2;
@@ -26,8 +25,8 @@ pub struct FontData {
 }
 
 impl FontData {
-    pub fn try_from_bytes(font_Data: &[u8]) -> FontResult<Self> {
-        let font = fontdue::Font::from_bytes(font_Data, fontdue::FontSettings::default())?;
+    pub fn try_from_bytes(font_data: &[u8]) -> FontResult<Self> {
+        let font = fontdue::Font::from_bytes(font_data, fontdue::FontSettings::default())?;
         Ok(FontData { font })
     }
 

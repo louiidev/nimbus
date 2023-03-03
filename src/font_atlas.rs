@@ -111,7 +111,7 @@ impl FontAtlasSet {
             .or_insert_with(|| FontAtlas::new(images, texture_atlases, Vec2::splat(512.0)));
 
         for character in text.chars() {
-            if (!font_atlas.has_glyph(character)) {
+            if !font_atlas.has_glyph(character) {
                 let (metrics, bitmap) = font.rasterize(character, font_size);
                 font_atlas.add_glyph(images, texture_atlases, character, &bitmap, metrics);
             }
@@ -153,8 +153,6 @@ impl FontAtlasSet {
             &[&font.font],
             &TextStyle::new(&text.value, text.theme.font_size, 0),
         );
-
-        dbg!(layout.lines());
 
         for glyph in layout.glyphs() {
             let atlas_info = self

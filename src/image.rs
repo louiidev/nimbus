@@ -125,13 +125,3 @@ impl Image {
         )
     }
 }
-
-#[test]
-fn white_image() {
-    let image = Image::new_fill(
-        Extent3d::default(),
-        TextureDimension::D2,
-        &[255u8; 4],
-        DEFAULT_TEXTURE_FORMAT,
-    );
-}

@@ -15,7 +15,7 @@ use crate::{
     internal_image::Image,
     rect::Rect,
     resources::utils::{Assets, ResourceVec},
-    texture_atlas::{self, TextureAtlas},
+    texture_atlas::TextureAtlas,
     transform::GlobalTransform,
 };
 

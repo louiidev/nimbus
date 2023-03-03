@@ -141,7 +141,8 @@ impl App {
         self.load_font_with_id(
             include_bytes!("./default_assets/FiraSans-Bold.ttf"),
             DEFAULT_FONT_ID,
-        );
+        )
+        .expect("Default font failed to load");
 
         let mut ui_handler = self.world.get_resource_mut::<UiHandler>().unwrap();
 
