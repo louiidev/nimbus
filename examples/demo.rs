@@ -36,7 +36,7 @@ fn main() {
     let tilemap = include_bytes!("tilemap.png");
 
     let mut app = App::new(guacamole::window::WindowDescriptor {
-        title: "app".to_string(),
+        title: "🥑 guacamole 🥑".to_string(),
         width: 1280.,
         height: 720.,
         ..Default::default()

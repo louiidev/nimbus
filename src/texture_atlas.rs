@@ -110,7 +110,6 @@ impl DynamicTextureAtlasBuilder {
 
     fn place_texture(&mut self, atlas_image: &mut Image, allocation: Allocation, image: &Image) {
         let mut rect = allocation.rectangle;
-        dbg!(rect);
         rect.max.x -= self.padding;
         rect.max.y -= self.padding;
         let atlas_width = atlas_image.texture_descriptor.size.width as usize;
