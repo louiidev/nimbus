@@ -22,10 +22,6 @@ use super::{
     QUAD_VERTEX_POSITIONS,
 };
 
-pub fn cleanup_sprite_batch(mut sprite_batch: ResMut<ResourceVec<RenderBatchItem>>) {
-    sprite_batch.values = Vec::default();
-}
-
 pub fn prepare_sprites_for_batching(
     sprite_query: Query<(&Sprite, &mut GlobalTransform), Without<Camera>>,
     renderer: Res<Renderer>,

@@ -32,7 +32,6 @@ impl FontData {
 
     pub fn rasterize(&self, character: char, font_size: f32) -> (Metrics, Image) {
         let (metrics, bitmap) = self.font.rasterize(character, font_size);
-        dbg!(character, metrics);
         let image = Image::new(
             Extent3d {
                 width: metrics.width as _,

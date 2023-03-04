@@ -96,7 +96,6 @@ impl DynamicTextureAtlasBuilder {
             image.texture_descriptor.size.height as i32 + self.padding,
         ));
 
-        dbg!(image.texture_descriptor.size);
         if let Some(allocation) = allocation {
             let atlas_texture = textures.get_mut(&texture_atlas.texture_id).unwrap();
             self.place_texture(atlas_texture, allocation, image);

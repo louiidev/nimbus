@@ -13,8 +13,7 @@ use crate::{
 };
 
 use super::{
-    sprite_batching::{cleanup_sprite_batch, prepare_sprites_for_batching},
-    text::prepare_text_for_batching,
+    sprite_batching::prepare_sprites_for_batching, text::prepare_text_for_batching,
     RenderBatchItem, Renderer, Vertex,
 };
 
@@ -52,9 +51,6 @@ impl App {
 
         self.schedule
             .add_system_to_stage(CoreStage::PrepareRenderer, prepare_text_for_batching);
-
-        self.schedule
-            .add_system_to_stage(CoreStage::PostRender, cleanup_sprite_batch);
 
         let sprite_batch_resource: Vec<RenderBatchItem> = Vec::new();
 

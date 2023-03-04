@@ -29,6 +29,7 @@ pub fn input_system(
     mut ui_handler: ResMut<UiHandler>,
 ) {
     input_controller.bypass_change_detection().clear();
+
     for event in keyboard_events.iter() {
         let KeyboardInput {
             key_code, state, ..
@@ -58,7 +59,7 @@ pub fn input_system(
         input_controller.mouse_position.y = position.y as f32;
     }
 
-    ui_handler.input_controller = input_controller.clone();
+    ui_handler.bypass_change_detection().input_controller = input_controller.clone();
 }
 
 #[derive(Debug, Resource, Clone)]
