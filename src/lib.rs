@@ -5,6 +5,8 @@ use bevy_ecs::{
     world::{FromWorld, World},
 };
 
+use ecs::schedule::ShouldRun;
+use editor::{Editor, EditorMode};
 use events::{CursorMoved, KeyboardInput, MouseButtonInput, WindowCreated, WindowResized};
 use font::FontData;
 use font_atlas::FontAtlasSet;
@@ -48,6 +50,7 @@ pub mod transform;
 pub mod ui;
 pub mod window;
 
+pub mod editor;
 pub mod font;
 mod font_atlas;
 pub mod loaders;
@@ -102,6 +105,22 @@ impl Default for App {
     }
 }
 
+fn run_if_game_mode(editor: Res<Editor>) -> ShouldRun {
+    if editor.mode == EditorMode::Game {
+        ShouldRun::Yes
+    } else {
+        ShouldRun::No
+    }
+}
+
+fn run_if_editor_mode(editor: Res<Editor>) -> ShouldRun {
+    if editor.mode == EditorMode::Editor {
+        ShouldRun::Yes
+    } else {
+        ShouldRun::No
+    }
+}
+
 impl App {
     fn add_default_stages(&mut self) {
         self.schedule
@@ -126,6 +145,7 @@ impl App {
         self.add_asset::<Image>();
         self.init_resource::<FontAtlasSet>();
         self.add_asset::<FontData>();
+        self.init_resource::<Editor>();
 
         let image = Image::new_fill(
             Extent3d::default(),
@@ -223,6 +243,29 @@ impl App {
     }
 
     pub fn add_system<Params>(mut self, system: impl IntoSystemDescriptor<Params>) -> Self {
+        #[cfg(debug_assertions)]
+        self.schedule.add_system_to_stage(
+            CoreStage::Update,
+            system.with_run_criteria(run_if_game_mode),
+        );
+
+        #[cfg(not(debug_assertions))]
+        self.schedule.add_system_to_stage(CoreStage::Update, system);
+
+        self
+    }
+
+    pub fn add_editor_system<Params>(mut self, system: impl IntoSystemDescriptor<Params>) -> Self {
+        #[cfg(debug_assertions)]
+        self.schedule.add_system_to_stage(
+            CoreStage::Update,
+            system.with_run_criteria(run_if_editor_mode),
+        );
+        self
+    }
+
+    pub fn add_global_system<Params>(mut self, system: impl IntoSystemDescriptor<Params>) -> Self {
+        #[cfg(debug_assertions)]
         self.schedule.add_system_to_stage(CoreStage::Update, system);
         self
     }
@@ -233,6 +276,7 @@ impl App {
         stage: impl StageLabel,
     ) -> Self {
         self.schedule.add_system_to_stage(stage, system);
+
         self
     }
 
@@ -304,21 +348,4 @@ impl App {
             }
         });
     }
-}
-
-pub struct FrameCounterInfo {
-    fps: i32,
-    frame_count: i32,
-    frame_time: i32,
-}
-
-pub fn diagnostic_system(time: Res<Time>) {
-    let delta_seconds = time.raw_delta_seconds_f64();
-    if delta_seconds == 0.0 {
-        return;
-    }
-
-    dbg!(delta_seconds * 1000.0);
-
-    dbg!(1.0 / delta_seconds);
 }

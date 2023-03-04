@@ -131,6 +131,9 @@ pub fn upload_images_to_gpu(
                 Texture::from_image(&renderer.device, &renderer.queue, image, None),
             );
 
+            #[cfg(debug_assertions)]
+            println!("image updated");
+
             textures_to_updated.insert(
                 *key,
                 Vec2::new(
@@ -141,16 +144,12 @@ pub fn upload_images_to_gpu(
             image.dirty = false;
         }
     }
-
-    for (key, size) in textures_to_updated.iter() {
-        ui_handler.texture_atlases.get_mut(key).unwrap().size = *size;
-    }
 }
 
 pub fn render_system(
     renderer: Res<Renderer>,
     sprite_pipeline: Res<SpritePipeline>,
-    sprite_batch: Res<ResourceVec<RenderBatchItem>>,
+    mut sprite_batch: ResMut<ResourceVec<RenderBatchItem>>,
     mut camera: Query<&mut Camera>,
     mut time: ResMut<Time>,
 ) {
@@ -204,7 +203,7 @@ pub fn render_system(
         .queue
         .submit(std::iter::once(command_encoder.finish()));
     output.present();
-
+    sprite_batch.values.clear();
     time.update()
 }
 
