@@ -11,6 +11,7 @@ use events::{CursorMoved, KeyboardInput, MouseButtonInput, WindowCreated, Window
 use font::FontData;
 use font_atlas::FontAtlasSet;
 use internal_image::{Image, DEFAULT_TEXTURE_FORMAT};
+use math::{UVec2, Vec2};
 use renderer::{render_system, texture::Texture, upload_images_to_gpu, Renderer};
 
 use resources::{
@@ -22,11 +23,10 @@ use time::Time;
 use transform::transform_propagate_system;
 use ui::UiHandler;
 use wgpu::{Extent3d, TextureDimension};
-use window::{create_window, WindowDescriptor};
+use window::{create_window, Window, WindowDescriptor, WinitWindow};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::Window,
 };
 
 pub const DEFAULT_TEXTURE_ID: uuid::Uuid =
@@ -54,6 +54,7 @@ pub mod editor;
 pub mod font;
 mod font_atlas;
 pub mod loaders;
+pub mod ray;
 pub mod utils;
 
 pub use bevy_ecs as ecs;
@@ -80,7 +81,7 @@ pub struct App {
     pub world: World,
     schedule: Schedule,
     event_loop: Option<EventLoop<()>>,
-    window: Window,
+    window: WinitWindow,
 }
 
 impl Default for App {
@@ -171,7 +172,7 @@ impl App {
         self
     }
 
-    fn add_default_system_resources(mut self) -> Self {
+    fn add_default_system_resources(mut self, window: Window) -> Self {
         self.add_default_stages();
         self.init_resource::<InputController>();
 
@@ -182,7 +183,7 @@ impl App {
             .add_system_to_stage(crate::camera::camera_system, CoreStage::PostUpdate)
             .add_system_to_stage(input_system, CoreStage::PreUpdate)
             .add_system_to_stage(upload_images_to_gpu, CoreStage::PostUpdate)
-            .init_2d_renderer()
+            .init_2d_renderer(window)
             .init_ui_renderer()
     }
 
@@ -208,26 +209,36 @@ impl App {
     }
 
     pub fn new(window_descriptor: WindowDescriptor) -> Self {
-        let (window, event_loop) = create_window(window_descriptor);
+        let (winit_window, event_loop) = create_window(window_descriptor);
+
         let mut world = World::default();
         let default_font_id = uuid::Uuid::new_v4();
-        let renderer = pollster::block_on(Renderer::new(&window, default_font_id));
-        world.insert_resource(UiHandler::new());
+        let renderer = pollster::block_on(Renderer::new(&winit_window, default_font_id));
+
         world.insert_resource(renderer);
-        let window_size = window.inner_size();
+        let window_size = winit_window.inner_size();
+        world.insert_resource(UiHandler::new(Vec2::new(
+            window_size.width as f32,
+            window_size.height as f32,
+        )));
+        dbg!(&winit_window);
+        let window = Window {
+            physical_size: UVec2::new(window_size.width, window_size.height),
+            scale: winit_window.scale_factor() as f32,
+        };
         world.send_event(WindowCreated {
             width: window_size.width as f32,
             height: window_size.height as f32,
         });
 
         let app = App {
-            window,
+            window: winit_window,
             world,
             event_loop: Some(event_loop),
             schedule: Schedule::default(),
         };
 
-        app.add_default_system_resources().add_assets()
+        app.add_default_system_resources(window).add_assets()
     }
 
     pub fn spawn<T: Bundle>(mut self, component: T) -> Self {

@@ -74,7 +74,8 @@ impl<'a> Widget for Button<'a> {
                 },
                 ..Default::default()
             },
-            rect,
+            rect.min,
+            Some(rect.max),
         );
 
         WidgetResponse { clicked }

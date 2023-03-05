@@ -1,13 +1,15 @@
-use glam::Vec2;
+use glam::{UVec2, Vec2};
 use log::warn;
 use wgpu::PresentMode;
 use winit::{
     dpi::LogicalSize,
     event_loop::EventLoop,
-    window::{Fullscreen, Window, WindowBuilder},
+    window::{Fullscreen, WindowBuilder},
 };
 
-pub fn create_window(window_descriptor: WindowDescriptor) -> (Window, EventLoop<()>) {
+pub type WinitWindow = winit::window::Window;
+
+pub fn create_window(window_descriptor: WindowDescriptor) -> (WinitWindow, EventLoop<()>) {
     let WindowDescriptor {
         width,
         height,
@@ -66,7 +68,6 @@ pub fn create_window(window_descriptor: WindowDescriptor) -> (Window, EventLoop<
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct WindowDescriptor {
     /// The requested logical width of the window's client area.
     ///
@@ -273,4 +274,10 @@ pub enum WindowPosition {
     ///
     /// The monitor to position the window on can be selected with the `monitor` field in `WindowDescriptor`.
     At(Vec2),
+}
+
+#[derive(Debug)]
+pub struct Window {
+    pub physical_size: UVec2,
+    pub scale: f32,
 }

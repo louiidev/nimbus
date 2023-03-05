@@ -84,7 +84,7 @@ pub fn prepare_text_for_batching(
         let text_glyphs = font_atlas_set.queue_text(
             &font,
             text,
-            Rect::default(),
+            todo!("Calculate rect"),
             &mut texture_atlases,
             &mut images,
             fontdue::layout::CoordinateSystem::PositiveYDown,
