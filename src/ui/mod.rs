@@ -88,6 +88,7 @@ pub struct UiHandler {
     pub hover_id: Option<Id>,
     pub font_atlas: FontAtlasSet,
     pub(crate) fonts: Assets<FontData>,
+    pub(crate) container_size: Vec2,
 }
 
 impl Default for UiHandler {
@@ -102,12 +103,13 @@ impl Default for UiHandler {
             font_atlas: FontAtlasSet::default(),
             fonts: Assets::new(),
             texture_atlases_images: Assets::default(),
+            container_size: Vec2::default(),
         }
     }
 }
 
 impl UiHandler {
-    pub fn new() -> Self {
+    pub fn new(window_size: Vec2) -> Self {
         // Prepare glyph_brush
 
         UiHandler {
@@ -120,6 +122,7 @@ impl UiHandler {
             hover_id: None,
             font_atlas: FontAtlasSet::default(),
             fonts: Assets::new(),
+            container_size: window_size,
         }
     }
 
@@ -233,13 +236,17 @@ impl UiHandler {
         layout.ui_meta.push(meta);
     }
 
-    pub fn text(&mut self, text: Text, rect: Rect) {
+    pub fn text(&mut self, text: Text, position: Vec2, max_bounds: Option<Vec2>) {
         let font = self.fonts.get(&DEFAULT_FONT_ID).unwrap();
 
+        let rect = Rect {
+            min: position,
+            max: max_bounds.unwrap_or(self.container_size),
+        };
         let text_glyphs = self.font_atlas.queue_text(
             &font,
             &text,
-            rect,
+            &rect,
             &mut self.texture_atlases,
             &mut self.texture_atlases_images,
             fontdue::layout::CoordinateSystem::PositiveYDown,

@@ -122,7 +122,7 @@ impl FontAtlasSet {
         &mut self,
         font: &FontData,
         text: &Text,
-        container: Rect,
+        container: &Rect,
         texture_atlases: &mut Assets<TextureAtlas>,
         temp_image_storage: &mut Assets<Image>,
         y_axis_orientation: CoordinateSystem,

@@ -8,11 +8,15 @@ use crate::{
 use bevy_ecs::prelude::{Bundle, Component};
 use glam::Vec2;
 
+use super::collider::DebugCollider;
+
 #[derive(Bundle, Default, Debug)]
 pub struct SpriteBundle {
     pub sprite: Sprite,
     pub transform: Transform,
     pub global_transform: GlobalTransform,
+    #[cfg(debug_assertions)]
+    pub debug_collider: DebugCollider,
 }
 
 #[derive(Component, Clone, Copy, Debug)]

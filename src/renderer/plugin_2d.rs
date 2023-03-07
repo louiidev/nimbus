@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use bevy_ecs::system::Resource;
+use glam::{UVec2, Vec2};
 use wgpu::{
     include_wgsl, BindGroupLayout, BlendState, FragmentState, FrontFace, PolygonMode,
     PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, Sampler,
@@ -8,8 +9,8 @@ use wgpu::{
 };
 
 use crate::{
-    camera::CameraBundle, internal_image::ImageBindGroups, resources::utils::ResourceVec, App,
-    CoreStage,
+    camera::CameraBundle, components::collider::debug_collider_picker,
+    internal_image::ImageBindGroups, resources::utils::ResourceVec, window::Window, App, CoreStage,
 };
 
 use super::{
@@ -27,7 +28,7 @@ pub struct DefaultImageSampler(pub(crate) Arc<Sampler>);
 pub struct SpriteRenderPipeline(RenderPipeline);
 
 impl App {
-    pub fn init_2d_renderer(mut self) -> Self {
+    pub fn init_2d_renderer(mut self, window: Window) -> Self {
         self.world.insert_resource(ImageBindGroups::default());
 
         self.world.insert_resource(Renderer2D);
@@ -52,12 +53,14 @@ impl App {
         self.schedule
             .add_system_to_stage(CoreStage::PrepareRenderer, prepare_text_for_batching);
 
+        self = self.add_editor_system(debug_collider_picker);
+
         let sprite_batch_resource: Vec<RenderBatchItem> = Vec::new();
 
         self.world
             .insert_resource(ResourceVec::new(sprite_batch_resource));
 
-        self.world.spawn(CameraBundle::default());
+        self.world.spawn(CameraBundle::new(window));
 
         self
     }

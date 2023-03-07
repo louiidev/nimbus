@@ -1,24 +1,34 @@
-use bevy_ecs::system::ResMut;
+use bevy_ecs::system::{Query, Res, ResMut};
 use glam::{Vec2, Vec3};
 use guacamole::{
+    camera::Camera,
     color::Color,
-    components::sprite::{Sprite, SpriteBundle},
+    components::{
+        sprite::{Sprite, SpriteBundle},
+        text::{Text, TextAlignment, TextTheme},
+    },
     editor::{Editor, EditorMode},
+    resources::inputs::InputController,
     texture_atlas::TextureAtlas,
-    transform::Transform,
+    transform::{GlobalTransform, Transform},
     ui::{button::Button, UiHandler},
     App,
 };
 
-fn test_drawing_ui(mut ui_handler: ResMut<UiHandler>, mut editor: ResMut<Editor>) {
+fn test_drawing_ui(
+    mut ui_handler: ResMut<UiHandler>,
+    mut editor: ResMut<Editor>,
+    camera_q: Query<(&mut Camera, &mut GlobalTransform)>,
+    input: Res<InputController>,
+) {
+    let (camera, camera_transform) = camera_q.single();
     let button_text = if editor.mode == EditorMode::Game {
         "Switch to Editor"
     } else {
         "Switch to Game"
     };
-
     // ui_handler
-    ui_handler.layout(Vec2::new(250., 500.), 15.0, |ui| {
+    ui_handler.layout(Vec2::new(1280. / 2., 720. / 2.), 15.0, |ui| {
         if ui
             .button(Button {
                 text: button_text,
@@ -27,6 +37,26 @@ fn test_drawing_ui(mut ui_handler: ResMut<UiHandler>, mut editor: ResMut<Editor>
             .clicked
         {
             editor.toggle();
+        }
+
+        let mouse_pos = camera
+            .viewport_to_world(camera_transform, input.mouse_position)
+            .map(|ray| ray.origin.truncate());
+
+        if let Some(mouse_pos) = mouse_pos {
+            ui.text(
+                Text {
+                    value: format!("Mouse pos x: {}, pos y: {}", mouse_pos.x, mouse_pos.y),
+                    alignment: TextAlignment::default(),
+                    theme: TextTheme {
+                        font_size: 24.,
+                        color: Color::WHITE,
+                    },
+                    ..Default::default()
+                },
+                Vec2::new(550., 550.),
+                None,
+            );
         }
     });
 }
