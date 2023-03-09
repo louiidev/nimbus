@@ -66,7 +66,6 @@ pub struct PickedEntity {
 pub fn debug_collider_picker(
     mut query: Query<(&mut Sprite, &Transform, Entity)>,
     mut picked: Local<PickedEntity>,
-    camera_q: Query<(&mut Camera, &mut GlobalTransform)>,
     input_controller: Res<InputController>,
 ) {
     let mouse_just_pressed = input_controller
@@ -81,16 +80,6 @@ pub fn debug_collider_picker(
         return;
     }
 
-    let (camera, camera_transform) = camera_q.single();
-
-    let mouse_pos = camera
-        .viewport_to_world(camera_transform, input_controller.mouse_position)
-        .map(|ray| ray.origin.truncate());
-
-    if mouse_just_pressed {
-        dbg!(mouse_pos);
-    }
-
     for (mut sprite, transform, entity) in query.iter_mut() {
         let sprite_rect = sprite.texture_rect.unwrap_or(Rect::default());
         let sprite_pos = transform.translation.truncate();
@@ -103,7 +92,7 @@ pub fn debug_collider_picker(
             && collision::rect_contains_point(
                 sprite_rect.size() * transform.scale.truncate(),
                 sprite_pos,
-                mouse_pos.unwrap(),
+                input_controller.mouse_position,
             )
         {
             sprite.color = Color::BLUE;

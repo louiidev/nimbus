@@ -12,7 +12,7 @@ log = "0.4.17"
 wgpu = "0.14"
 pollster = "0.2"
 bytemuck = { version = "1.12", features = [ "derive" ] }
-bevy_ecs = "0.9"
+bevy_ecs = "0.10"
 rand = "*"
 glam = "0.22"
 uuid = "1.2"

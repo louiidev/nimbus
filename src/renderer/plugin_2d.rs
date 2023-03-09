@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use bevy_ecs::system::Resource;
-use glam::{UVec2, Vec2};
+use bevy_ecs::{schedule::IntoSystemConfig, system::Resource};
 use wgpu::{
     include_wgsl, BindGroupLayout, BlendState, FragmentState, FrontFace, PolygonMode,
     PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, Sampler,
@@ -10,12 +9,12 @@ use wgpu::{
 
 use crate::{
     camera::CameraBundle, components::collider::debug_collider_picker,
-    internal_image::ImageBindGroups, resources::utils::ResourceVec, window::Window, App, CoreStage,
+    internal_image::ImageBindGroups, resources::utils::ResourceVec, window::Window, App, CoreSet,
 };
 
 use super::{
-    sprite_batching::prepare_sprites_for_batching, text::prepare_text_for_batching,
-    RenderBatchItem, Renderer, Vertex,
+    shapes::prepare_shapes_for_batching, sprite_batching::prepare_sprites_for_batching,
+    text::prepare_text_for_batching, RenderBatchItem, Renderer, Vertex,
 };
 
 #[derive(Resource)]
@@ -28,7 +27,7 @@ pub struct DefaultImageSampler(pub(crate) Arc<Sampler>);
 pub struct SpriteRenderPipeline(RenderPipeline);
 
 impl App {
-    pub fn init_2d_renderer(mut self, window: Window) -> Self {
+    pub fn init_2d_renderer(mut self) -> Self {
         self.world.insert_resource(ImageBindGroups::default());
 
         self.world.insert_resource(Renderer2D);
@@ -48,10 +47,13 @@ impl App {
         self.world
             .insert_resource(DefaultImageSampler(Arc::new(default_sampler)));
         self.schedule
-            .add_system_to_stage(CoreStage::PrepareRenderer, prepare_sprites_for_batching);
+            .add_system(prepare_sprites_for_batching.in_set(CoreSet::PrepareRenderer));
 
         self.schedule
-            .add_system_to_stage(CoreStage::PrepareRenderer, prepare_text_for_batching);
+            .add_system(prepare_shapes_for_batching.in_set(CoreSet::PrepareRenderer));
+
+        self.schedule
+            .add_system(prepare_text_for_batching.in_set(CoreSet::PrepareRenderer));
 
         self = self.add_editor_system(debug_collider_picker);
 
@@ -59,8 +61,6 @@ impl App {
 
         self.world
             .insert_resource(ResourceVec::new(sprite_batch_resource));
-
-        self.world.spawn(CameraBundle::new(window));
 
         self
     }

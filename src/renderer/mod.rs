@@ -14,6 +14,7 @@ use crate::{
     resources::utils::{Assets, ResourceVec},
     time::Time,
     ui::UiHandler,
+    ClearColor,
 };
 
 use self::{plugin_2d::SpritePipeline, sprite_batching::render_sprite_batches, texture::Texture};
@@ -46,6 +47,7 @@ pub struct Renderer {
 
 pub(crate) mod mesh;
 pub(crate) mod plugin_2d;
+pub mod shapes;
 pub(crate) mod sprite_batching;
 pub mod text;
 pub mod texture;
@@ -152,6 +154,7 @@ pub fn render_system(
     mut sprite_batch: ResMut<ResourceVec<RenderBatchItem>>,
     mut camera: Query<&mut Camera>,
     mut time: ResMut<Time>,
+    clear_color: Res<ClearColor>,
 ) {
     let camera = camera.get_single_mut().unwrap();
 
@@ -179,10 +182,10 @@ pub fn render_system(
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
+                        r: clear_color.0.red as _,
+                        g: clear_color.0.green as _,
+                        b: clear_color.0.blue as _,
+                        a: 1f64,
                     }),
                     store: true,
                 },

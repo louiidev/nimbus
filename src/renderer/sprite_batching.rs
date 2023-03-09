@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cmp::Ordering, sync::Arc};
 
 use bevy_ecs::{
     query::Without,
@@ -12,7 +12,7 @@ use crate::{
     camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID},
     components::sprite::Sprite,
     resources::utils::{Assets, ResourceVec},
-    transform::GlobalTransform,
+    transform::{GlobalTransform, Transform},
 };
 
 use super::{
@@ -23,7 +23,7 @@ use super::{
 };
 
 pub fn prepare_sprites_for_batching(
-    sprite_query: Query<(&Sprite, &mut GlobalTransform), Without<Camera>>,
+    sprite_query: Query<(&Sprite, &GlobalTransform, &Transform), Without<Camera>>,
     renderer: Res<Renderer>,
     sprite_assets: Res<Assets<Texture>>,
     sprite_pipeline: Res<SpritePipeline>,
@@ -71,7 +71,18 @@ pub fn prepare_sprites_for_batching(
 
     let mut batches: Vec<RenderBatchMeta<Vertex>> = Vec::new();
 
-    for (sprite, transform) in sprite_query.iter() {
+    let mut query = sprite_query
+        .iter()
+        .collect::<Vec<(&Sprite, &GlobalTransform, &Transform)>>();
+
+    query.sort_unstable_by(
+        |a, b| match a.2.translation.z.partial_cmp(&b.2.translation.z) {
+            Some(Ordering::Equal) | None => a.0.texture_id.cmp(&b.0.texture_id),
+            Some(other) => other,
+        },
+    );
+
+    for (sprite, transform, _) in query {
         let mut uvs = QUAD_UVS;
 
         let mut vertices = Vec::new();

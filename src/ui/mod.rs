@@ -187,7 +187,7 @@ impl UiHandler {
     }
 
     pub fn check_hover(&mut self, size: Vec2, position: Vec2) -> bool {
-        collision::rect_contains_point(size, position, self.input_controller.mouse_position)
+        collision::rect_contains_point(size, position, self.input_controller.screen_mouse_position)
     }
 
     pub fn check_active(&mut self, id: Id) -> bool {

@@ -1,11 +1,15 @@
 use bevy_ecs::{
-    prelude::{Bundle, Events},
-    schedule::{IntoSystemDescriptor, Schedule, Stage, StageLabel, SystemStage},
+    prelude::*,
+    schedule::Schedule,
     system::{Res, Resource},
     world::{FromWorld, World},
 };
 
-use ecs::schedule::ShouldRun;
+use color::Color;
+use ecs::{
+    prelude::not,
+    schedule::{IntoSystemConfig, SystemSet},
+};
 use editor::{Editor, EditorMode};
 use events::{CursorMoved, KeyboardInput, MouseButtonInput, WindowCreated, WindowResized};
 use font::FontData;
@@ -61,21 +65,40 @@ pub use bevy_ecs as ecs;
 pub use glam as math;
 pub use winit;
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, StageLabel)]
-pub enum CoreStage {
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CoreSet {
     /// The [`Stage`](bevy_ecs::schedule::Stage) that runs before all other app stages.
     First,
-    /// The [`Stage`](bevy_ecs::schedule::Stage) that runs before [`CoreStage::Update`].
+    /// The [`Stage`](bevy_ecs::schedule::Stage) that runs before [`CoreSet::Update`].
     PreUpdate,
     /// The [`Stage`](bevy_ecs::schedule::Stage) responsible for doing most app logic. Systems should be registered here by default.
     Update,
-    /// The [`Stage`](bevy_ecs::schedule::Stage) that runs after [`CoreStage::Update`].
+    /// The [`Stage`](bevy_ecs::schedule::Stage) that runs after [`CoreSet::Update`].
     PostUpdate,
     PrepareRenderer,
     Render,
-    /// Cleanup render cache that runs after [`CoreStage::Render`].
+    /// Cleanup render cache that runs after [`CoreSet::Render`].
     PostRender,
 }
+
+impl CoreSet {
+    /// The sets defined in this enum are configured to run in order,
+    pub fn base_schedule() -> Schedule {
+        use CoreSet::*;
+        let mut schedule = Schedule::new();
+
+        // Create "stage-like" structure using buffer flushes + ordering
+        schedule.configure_set(Update.after(PreUpdate).before(PostUpdate));
+        schedule.configure_set(PrepareRenderer.after(PostUpdate).before(Render));
+        schedule.configure_set(PostRender.after(Render));
+
+        schedule
+    }
+}
+
+// TODO: move this
+#[derive(Resource, Default)]
+pub struct ClearColor(pub Color);
 
 pub struct App {
     pub world: World,
@@ -84,55 +107,16 @@ pub struct App {
     window: WinitWindow,
 }
 
-impl Default for App {
-    fn default() -> Self {
-        let mut world = World::default();
-        let (window, event_loop) = create_window(WindowDescriptor::default());
-        let default_font_id = uuid::Uuid::new_v4();
-        let renderer = pollster::block_on(Renderer::new(&window, default_font_id));
-        world.insert_resource(renderer);
-        let window_size = window.inner_size();
-        world.send_event(WindowCreated {
-            width: window_size.width as f32,
-            height: window_size.height as f32,
-        });
-
-        App {
-            schedule: Schedule::default(),
-            event_loop: Some(event_loop),
-            window,
-            world,
-        }
-    }
+fn run_if_game_mode(editor: Res<Editor>) -> bool {
+    editor.mode == EditorMode::Game
 }
 
-fn run_if_game_mode(editor: Res<Editor>) -> ShouldRun {
-    if editor.mode == EditorMode::Game {
-        ShouldRun::Yes
-    } else {
-        ShouldRun::No
-    }
-}
-
-fn run_if_editor_mode(editor: Res<Editor>) -> ShouldRun {
-    if editor.mode == EditorMode::Editor {
-        ShouldRun::Yes
-    } else {
-        ShouldRun::No
-    }
+fn run_if_editor_mode(editor: Res<Editor>) -> bool {
+    editor.mode == EditorMode::Editor
 }
 
 impl App {
     fn add_default_stages(&mut self) {
-        self.schedule
-            .add_stage(CoreStage::First, SystemStage::parallel())
-            .add_stage(CoreStage::PreUpdate, SystemStage::parallel())
-            .add_stage(CoreStage::Update, SystemStage::parallel())
-            .add_stage(CoreStage::PostUpdate, SystemStage::parallel())
-            .add_stage(CoreStage::PrepareRenderer, SystemStage::parallel())
-            .add_stage(CoreStage::Render, SystemStage::parallel())
-            .add_stage(CoreStage::PostRender, SystemStage::parallel());
-
         self.add_event::<WindowResized>()
             .add_event::<WindowCreated>()
             .add_event::<KeyboardInput>()
@@ -147,7 +131,7 @@ impl App {
         self.init_resource::<FontAtlasSet>();
         self.add_asset::<FontData>();
         self.init_resource::<Editor>();
-
+        self = self.insert_resource::<ClearColor>(ClearColor(Color::rgb_u8(52, 21, 174)));
         let image = Image::new_fill(
             Extent3d::default(),
             TextureDimension::D2,
@@ -172,23 +156,32 @@ impl App {
         self
     }
 
-    fn add_default_system_resources(mut self, window: Window) -> Self {
+    fn add_default_system_resources(mut self) -> Self {
         self.add_default_stages();
         self.init_resource::<InputController>();
 
         self.init_resource::<Time>();
-
-        self.add_system_to_stage(render_system, CoreStage::Render)
-            .add_system_to_stage(transform_propagate_system, CoreStage::PostUpdate)
-            .add_system_to_stage(crate::camera::camera_system, CoreStage::PostUpdate)
-            .add_system_to_stage(input_system, CoreStage::PreUpdate)
-            .add_system_to_stage(upload_images_to_gpu, CoreStage::PostUpdate)
-            .init_2d_renderer(window)
+        self.add_internal_system(render_system.in_set(CoreSet::Render))
+            .add_internal_system(transform_propagate_system.in_set(CoreSet::PostUpdate))
+            .add_internal_system(crate::camera::camera_system.in_set(CoreSet::PreUpdate))
+            .add_internal_system(input_system.in_set(CoreSet::PreUpdate))
+            .add_internal_system(
+                upload_images_to_gpu
+                    .in_set(CoreSet::PostUpdate)
+                    .before(CoreSet::PrepareRenderer),
+            )
+            .init_2d_renderer()
             .init_ui_renderer()
     }
 
     pub fn init_resource<R: Resource + FromWorld>(&mut self) -> &mut Self {
         self.world.init_resource::<R>();
+        self
+    }
+
+    pub fn insert_resource<R: Resource + FromWorld>(mut self, resource: R) -> Self {
+        self.world.insert_resource::<R>(resource);
+
         self
     }
 
@@ -203,7 +196,7 @@ impl App {
         if !self.world.contains_resource::<Events<T>>() {
             self.init_resource::<Events<T>>()
                 .schedule
-                .add_system_to_stage(CoreStage::First, Events::<T>::update_system);
+                .add_system(Events::<T>::update_system.in_set(CoreSet::First));
         }
         self
     }
@@ -221,15 +214,6 @@ impl App {
             window_size.width as f32,
             window_size.height as f32,
         )));
-        dbg!(&winit_window);
-        let window = Window {
-            physical_size: UVec2::new(window_size.width, window_size.height),
-            scale: winit_window.scale_factor() as f32,
-        };
-        world.send_event(WindowCreated {
-            width: window_size.width as f32,
-            height: window_size.height as f32,
-        });
 
         let app = App {
             window: winit_window,
@@ -238,7 +222,7 @@ impl App {
             schedule: Schedule::default(),
         };
 
-        app.add_default_system_resources(window).add_assets()
+        app.add_default_system_resources().add_assets()
     }
 
     pub fn spawn<T: Bundle>(mut self, component: T) -> Self {
@@ -247,47 +231,32 @@ impl App {
         self
     }
 
-    pub fn spawn_bundle<T: Bundle>(mut self, bundle: T) -> Self {
-        self.world.spawn(bundle);
+    pub fn add_internal_system<Params>(mut self, system: impl IntoSystemConfig<Params>) -> Self {
+        self.schedule.add_system(system);
 
         self
     }
 
-    pub fn add_system<Params>(mut self, system: impl IntoSystemDescriptor<Params>) -> Self {
+    pub fn add_system<Params>(mut self, system: impl IntoSystemConfig<Params>) -> Self {
         #[cfg(debug_assertions)]
-        self.schedule.add_system_to_stage(
-            CoreStage::Update,
-            system.with_run_criteria(run_if_game_mode),
-        );
+        self.schedule
+            .add_system(system.in_set(CoreSet::Update).run_if(not(run_if_game_mode)));
 
         #[cfg(not(debug_assertions))]
-        self.schedule.add_system_to_stage(CoreStage::Update, system);
+        self.schedule.add_system(system.in_set(CoreSet::Update));
 
         self
     }
 
-    pub fn add_editor_system<Params>(mut self, system: impl IntoSystemDescriptor<Params>) -> Self {
+    pub fn add_editor_system<Params>(mut self, system: impl IntoSystemConfig<Params>) -> Self {
         #[cfg(debug_assertions)]
-        self.schedule.add_system_to_stage(
-            CoreStage::Update,
-            system.with_run_criteria(run_if_editor_mode),
-        );
+        self.schedule.add_system(system.run_if(run_if_editor_mode));
         self
     }
 
-    pub fn add_global_system<Params>(mut self, system: impl IntoSystemDescriptor<Params>) -> Self {
+    pub fn add_global_system<Params>(mut self, system: impl IntoSystemConfig<Params>) -> Self {
         #[cfg(debug_assertions)]
-        self.schedule.add_system_to_stage(CoreStage::Update, system);
-        self
-    }
-
-    pub fn add_system_to_stage<Params>(
-        mut self,
-        system: impl IntoSystemDescriptor<Params>,
-        stage: impl StageLabel,
-    ) -> Self {
-        self.schedule.add_system_to_stage(stage, system);
-
+        self.schedule.add_system(system.in_set(CoreSet::Update));
         self
     }
 
@@ -303,6 +272,12 @@ impl App {
         env_logger::init();
 
         let event_loop = self.event_loop.take().unwrap();
+
+        self.world.send_event(WindowCreated {
+            width: self.window.inner_size().width as f32,
+            height: self.window.inner_size().height as f32,
+            scale: self.window.scale_factor() as f32,
+        });
 
         event_loop.run(move |event, _, control_flow| {
             let window = &self.window;
@@ -345,6 +320,7 @@ impl App {
                     WindowEvent::CursorMoved { position, .. } => {
                         self.world.send_event(CursorMoved {
                             position: *position,
+                            window_size: window.inner_size(),
                         });
                     }
                     _ => {}

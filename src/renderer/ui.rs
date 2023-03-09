@@ -1,15 +1,18 @@
 use std::sync::Arc;
 
-use bevy_ecs::system::{Query, Res, ResMut};
-use glam::Vec2;
+use bevy_ecs::{
+    schedule::IntoSystemConfig,
+    system::{Query, Res, ResMut},
+};
+use glam::{Vec2, Vec3};
 use wgpu::util::DeviceExt;
 
 use crate::{
     camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID},
     resources::utils::{Assets, ResourceVec},
-    transform::GlobalTransform,
+    transform::Transform,
     ui::{UiHandler, UiVertex},
-    App, CoreStage,
+    App, CoreSet,
 };
 
 use super::{
@@ -25,17 +28,19 @@ pub fn prepare_ui_for_batching(
     sprite_pipeline: Res<SpritePipeline>,
     default_sampler: Res<DefaultImageSampler>,
     mut layout_batches: ResMut<ResourceVec<RenderBatchItem>>,
-    mut camera: Query<(&mut Camera, &mut GlobalTransform)>,
+    mut camera: Query<(&mut Camera)>,
 ) {
-    let (mut camera, global_transform) = camera.get_single_mut().unwrap();
+    let mut camera = camera.get_single_mut().unwrap();
 
     let projection = camera.projection_matrix_ui(Vec2::new(
         renderer.size.width as f32,
         renderer.size.height as f32,
     ));
-
-    let view = global_transform.compute_matrix();
-    let inverse_view = view.inverse();
+    let transform = Transform {
+        translation: Vec3::new(0., 0., 999.),
+        ..Default::default()
+    };
+    let inverse_view = transform.compute_matrix().inverse();
     let view_projection = projection * inverse_view;
 
     let camera_uniform = CameraUniform {
@@ -119,7 +124,7 @@ pub fn prepare_ui_for_batching(
             let texture = sprite_assets
                 .data
                 .get(&batch.texture_id)
-                .expect(&format!("Missing texture id = {}", &batch.texture_id));
+                .unwrap_or_else(|| panic!("Missing texture id = {}", &batch.texture_id));
 
             let texture_bind_group =
                 renderer
@@ -155,7 +160,7 @@ pub fn prepare_ui_for_batching(
 impl App {
     pub fn init_ui_renderer(mut self) -> Self {
         self.schedule
-            .add_system_to_stage(CoreStage::PrepareRenderer, prepare_ui_for_batching);
+            .add_system(prepare_ui_for_batching.in_set(CoreSet::PrepareRenderer));
 
         self
     }

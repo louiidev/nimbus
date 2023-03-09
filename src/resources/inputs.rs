@@ -1,7 +1,9 @@
+use crate::camera::Camera;
 use crate::events::{CursorMoved, KeyboardInput, MouseButtonInput};
+use crate::transform::GlobalTransform;
 use crate::ui::UiHandler;
-use bevy_ecs::prelude::{DetectChanges, EventReader};
-use bevy_ecs::system::{ResMut, Resource};
+use bevy_ecs::prelude::{DetectChangesMut, EventReader};
+use bevy_ecs::system::{Query, ResMut, Resource};
 use glam::Vec2;
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -9,6 +11,7 @@ use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
 #[derive(Resource, Default, Clone)]
 pub struct InputController {
+    pub screen_mouse_position: Vec2,
     pub mouse_position: Vec2,
     pub keyboards_inputs: Input<VirtualKeyCode>,
     pub mouse_button_inputs: Input<MouseButton>,
@@ -27,6 +30,7 @@ pub fn input_system(
     mut mouse_button_events: EventReader<MouseButtonInput>,
     mut input_controller: ResMut<InputController>,
     mut ui_handler: ResMut<UiHandler>,
+    camera_q: Query<(&mut Camera, &mut GlobalTransform)>,
 ) {
     input_controller.bypass_change_detection().clear();
 
@@ -54,9 +58,29 @@ pub fn input_system(
     }
 
     for event in cursor_move_events.iter() {
-        let CursorMoved { position } = event;
-        input_controller.mouse_position.x = position.x as f32;
-        input_controller.mouse_position.y = position.y as f32;
+        let CursorMoved {
+            position,
+            window_size,
+        } = event;
+        let (camera, camera_transform) = camera_q.single();
+
+        // move origin to bottom left
+        let y_position = window_size.height as f64 - position.y;
+
+        let mouse_pos = camera
+            .viewport_to_world(
+                camera_transform,
+                Vec2::new(position.x as f32, y_position as f32),
+            )
+            .map(|ray| ray.origin.truncate());
+
+        if let Some(mouse_pos) = mouse_pos {
+            input_controller.mouse_position.x = mouse_pos.x as f32;
+            input_controller.mouse_position.y = mouse_pos.y as f32;
+        }
+
+        input_controller.screen_mouse_position.x = position.x as f32;
+        input_controller.screen_mouse_position.y = position.y as f32;
     }
 
     ui_handler.bypass_change_detection().input_controller = input_controller.clone();

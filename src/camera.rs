@@ -38,12 +38,6 @@ impl CameraBundle {
     pub fn new(window: Window) -> Self {
         Self {
             camera: Camera {
-                viewport: Viewport {
-                    physical_position: UVec2::default(),
-                    physical_size: window.physical_size,
-                    dpi_scale: window.scale,
-                    ..Default::default()
-                },
                 computed: ComputedCameraValues {
                     target_info: RenderTargetInfo {
                         physical_size: window.physical_size,
@@ -86,13 +80,28 @@ pub fn camera_system(
     for event in window_created_events.iter() {
         camera
             .orthographic_projection
-            .update(event.width, event.height)
+            .update(event.width, event.height);
+
+        camera.computed.target_info = RenderTargetInfo {
+            physical_size: UVec2 {
+                x: event.width as _,
+                y: event.height as _,
+            },
+            scale_factor: event.scale,
+        }
     }
 
     for event in window_resized_events.iter() {
         camera
             .orthographic_projection
-            .update(event.width, event.height)
+            .update(event.width, event.height);
+        camera.computed.target_info = RenderTargetInfo {
+            physical_size: UVec2 {
+                x: event.width as _,
+                y: event.height as _,
+            },
+            scale_factor: camera.computed.target_info.scale_factor,
+        }
     }
 }
 
@@ -126,30 +135,6 @@ impl RenderTarget {
                     scale_factor: 1.0,
                 }
             }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Viewport {
-    /// The physical position to render this viewport to within the [`RenderTarget`] of this [`Camera`].
-    /// (0,0) corresponds to the top-left corner
-    pub physical_position: UVec2,
-    /// The physical size of the viewport rectangle to render to within the [`RenderTarget`] of this [`Camera`].
-    /// The origin of the rectangle is in the top-left corner.
-    pub physical_size: UVec2,
-    pub dpi_scale: f32,
-    /// The minimum and maximum depth to render (on a scale from 0.0 to 1.0).
-    pub depth: Range<f32>,
-}
-
-impl Default for Viewport {
-    fn default() -> Self {
-        Viewport {
-            dpi_scale: 1f32,
-            physical_position: UVec2::default(),
-            physical_size: UVec2::default(),
-            depth: Range::default(),
         }
     }
 }
@@ -318,7 +303,6 @@ pub struct CameraUniform {
 
 #[derive(Component, Debug, Clone)]
 pub struct Camera {
-    pub viewport: Viewport,
     pub is_active: bool,
     pub target: RenderTarget,
     pub computed: ComputedCameraValues,
@@ -342,7 +326,6 @@ impl Default for Camera {
     fn default() -> Self {
         Self {
             is_active: true,
-            viewport: Viewport::default(),
             computed: Default::default(),
             target: Default::default(),
             bind_groups: HashMap::default(),
@@ -365,7 +348,7 @@ impl Camera {
     /// Converts a physical size in this `Camera` to a logical size.
     #[inline]
     pub fn to_logical(&self, physical_size: UVec2) -> Vec2 {
-        physical_size.as_vec2() / self.viewport.dpi_scale
+        physical_size.as_vec2() / self.computed.target_info.scale_factor
     }
 
     /// The rendered physical bounds (minimum, maximum) of the camera. If the `viewport` field is
@@ -373,7 +356,7 @@ impl Camera {
     /// the full physical rect of the current [`RenderTarget`].
     #[inline]
     pub fn physical_viewport_rect(&self) -> (UVec2, UVec2) {
-        let min = self.viewport.physical_position;
+        let min = UVec2::ZERO;
         let max = min + self.physical_viewport_size();
         (min, max)
     }
@@ -394,7 +377,7 @@ impl Camera {
     /// [`RenderTarget`], prefer [`Camera::logical_target_size`].
     #[inline]
     pub fn logical_viewport_size(&self) -> Vec2 {
-        self.to_logical(self.viewport.physical_size)
+        self.to_logical(self.computed.target_info.physical_size)
     }
 
     /// The full logical size of this camera's [`RenderTarget`], ignoring custom `viewport` configuration.
@@ -411,7 +394,7 @@ impl Camera {
     /// For logic that requires the full physical size of the [`RenderTarget`], prefer [`Camera::physical_target_size`].
     #[inline]
     pub fn physical_viewport_size(&self) -> UVec2 {
-        self.viewport.physical_size
+        self.computed.target_info.physical_size
     }
 
     /// The full physical size of this camera's [`RenderTarget`], ignoring custom `viewport` configuration.
@@ -440,9 +423,11 @@ impl Camera {
         let projection = self.projection_matrix();
 
         let ndc_to_world = camera_transform.compute_matrix() * projection.inverse();
+        // dbg!(ndc_to_world);
         let world_near_plane = ndc_to_world.project_point3(ndc.extend(1.));
         // Using EPSILON because an ndc with Z = 0 returns NaNs.
         let world_far_plane = ndc_to_world.project_point3(ndc.extend(f32::EPSILON));
+        // dbg!(target_size, ndc, ndc_to_world, world_near_plane);
         (!world_near_plane.is_nan() && !world_far_plane.is_nan()).then_some(Ray {
             origin: world_near_plane,
             direction: (world_far_plane - world_near_plane).normalize(),

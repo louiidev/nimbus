@@ -199,7 +199,7 @@ impl Color {
         ])
     }
 
-    fn new(red: f32, green: f32, blue: f32, alpha: f32) -> Self {
+    pub fn new(red: f32, green: f32, blue: f32, alpha: f32) -> Self {
         Color {
             red,
             green,
