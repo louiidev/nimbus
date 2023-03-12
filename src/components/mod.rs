@@ -1,3 +1,4 @@
+pub mod animated_sprite;
 pub mod children;
 pub mod collider;
 pub mod parent;

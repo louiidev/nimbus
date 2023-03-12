@@ -17,9 +17,12 @@ use crate::{
     window::Window,
 };
 
-pub const ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID: u8 = 0;
-
-pub const ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID: u8 = 1;
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
+pub enum CameraBindGroupType {
+    Orthographic,
+    OrthographicUI,
+    Perspective,
+}
 
 #[derive(Bundle, Debug)]
 pub struct CameraBundle {
@@ -306,7 +309,7 @@ pub struct Camera {
     pub is_active: bool,
     pub target: RenderTarget,
     pub computed: ComputedCameraValues,
-    pub(crate) bind_groups: HashMap<u8, Arc<wgpu::BindGroup>>,
+    pub(crate) bind_groups: HashMap<CameraBindGroupType, Arc<wgpu::BindGroup>>,
     pub orthographic_projection: OrthographicProjection,
 }
 

@@ -10,14 +10,20 @@ use wgpu::{BindGroup, Buffer};
 use winit::window::Window;
 
 use crate::{
-    camera::Camera,
+    camera::{Camera, CameraBindGroupType},
     resources::utils::{Assets, ResourceVec},
     time::Time,
     ui::UiHandler,
     ClearColor,
 };
 
-use self::{plugin_2d::SpritePipeline, sprite_batching::render_sprite_batches, texture::Texture};
+use self::{
+    debug_drawing::{render_debug_meshes, DebugMeshPipeline, PreparedDebugMeshItem},
+    mesh::{render_meshes, PreparedMeshItem},
+    plugin_2d::SpritePipeline,
+    sprite_batching::render_sprite_batches,
+    texture::Texture,
+};
 
 pub const QUAD_INDICES: [u16; 6] = [0, 2, 3, 0, 1, 2];
 
@@ -45,8 +51,11 @@ pub struct Renderer {
     pub default_font_id: Uuid,
 }
 
+pub mod debug_drawing;
 pub(crate) mod mesh;
+pub mod mesh_pipeline;
 pub(crate) mod plugin_2d;
+pub mod prepare_camera_buffers;
 pub mod shapes;
 pub(crate) mod sprite_batching;
 pub mod text;
@@ -125,7 +134,6 @@ pub fn upload_images_to_gpu(
     mut ui_handler: ResMut<UiHandler>,
     mut textures: ResMut<Assets<Texture>>,
 ) {
-    let mut textures_to_updated = HashMap::new();
     for (key, image) in ui_handler.texture_atlases_images.data.iter_mut() {
         if image.dirty {
             textures.insert(
@@ -135,14 +143,6 @@ pub fn upload_images_to_gpu(
 
             #[cfg(debug_assertions)]
             println!("image updated");
-
-            textures_to_updated.insert(
-                *key,
-                Vec2::new(
-                    image.texture_descriptor.size.width as f32,
-                    image.texture_descriptor.size.height as f32,
-                ),
-            );
             image.dirty = false;
         }
     }
@@ -151,7 +151,11 @@ pub fn upload_images_to_gpu(
 pub fn render_system(
     renderer: Res<Renderer>,
     sprite_pipeline: Res<SpritePipeline>,
-    mut sprite_batch: ResMut<ResourceVec<RenderBatchItem>>,
+    mesh_pipeline: Res<mesh_pipeline::MeshPipeline>,
+    debug_mesh_pipeline: Res<DebugMeshPipeline>,
+    mut sprite_batch: ResMut<ResourceVec<PreparedRenderItem>>,
+    mut meshes: ResMut<ResourceVec<PreparedMeshItem>>,
+    mut prepared_debug_meshes: ResMut<ResourceVec<PreparedDebugMeshItem>>,
     mut camera: Query<&mut Camera>,
     mut time: ResMut<Time>,
     clear_color: Res<ClearColor>,
@@ -199,7 +203,19 @@ pub fn render_system(
             &camera.bind_groups,
         );
 
-        // render_ui(&mut render_pass);
+        render_meshes(
+            &meshes.values,
+            &mut render_pass,
+            &mesh_pipeline,
+            &camera.bind_groups,
+        );
+
+        render_debug_meshes(
+            &prepared_debug_meshes.values,
+            &mut render_pass,
+            &debug_mesh_pipeline,
+            &camera.bind_groups,
+        );
     }
 
     renderer
@@ -207,6 +223,8 @@ pub fn render_system(
         .submit(std::iter::once(command_encoder.finish()));
     output.present();
     sprite_batch.values.clear();
+    meshes.values.clear();
+    prepared_debug_meshes.values.clear();
     time.update()
 }
 
@@ -246,12 +264,12 @@ impl Vertex {
 }
 
 #[derive(Resource, Debug)]
-pub struct RenderBatchItem {
+pub struct PreparedRenderItem {
     vertex_buffer: Buffer,
     index_buffer: Buffer,
     texture_bind_group: BindGroup,
     indices_len: u32,
-    camera_bind_group_id: u8,
+    camera_bind_group_id: CameraBindGroupType,
 }
 
 pub struct RenderBatchMeta<V> {

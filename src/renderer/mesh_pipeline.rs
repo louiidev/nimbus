@@ -1,78 +1,32 @@
-use std::sync::Arc;
-
 use bevy_ecs::{schedule::IntoSystemConfig, system::Resource};
 use wgpu::{
     include_wgsl, BindGroupLayout, BlendState, FragmentState, FrontFace, PolygonMode,
-    PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, Sampler,
-    VertexState,
+    PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, VertexState,
 };
 
-use crate::{
-    components::collider::debug_collider_picker, internal_image::ImageBindGroups,
-    resources::utils::ResourceVec, App, CoreSet,
-};
+use crate::{resources::utils::ResourceVec, App, CoreSet};
 
 use super::{
-    shapes::prepare_shapes_for_batching, sprite_batching::prepare_sprites_for_batching,
-    text::prepare_text_for_batching, PreparedRenderItem, Renderer, Vertex,
+    debug_drawing::{
+        prepare_debug_mesh_to_render, DebugMesh, DebugMeshPipeline, PreparedDebugMeshItem,
+    },
+    mesh::{prepare_mesh_to_render, Mesh, MeshVertex, PreparedMeshItem},
+    prepare_camera_buffers::prepare_camera_3d_bindgroup,
+    Renderer,
 };
 
-#[derive(Resource, Clone)]
-pub struct DefaultImageSampler(pub(crate) Arc<Sampler>);
-
 #[derive(Resource)]
-pub struct SpriteRenderPipeline(RenderPipeline);
-
-impl App {
-    pub fn init_2d_renderer(mut self) -> Self {
-        self.world.insert_resource(ImageBindGroups::default());
-
-        let renderer = self.world.get_resource::<Renderer>().unwrap();
-
-        let default_sampler = {
-            renderer.device.create_sampler(&wgpu::SamplerDescriptor {
-                mag_filter: wgpu::FilterMode::Nearest,
-                min_filter: wgpu::FilterMode::Nearest,
-                mipmap_filter: wgpu::FilterMode::Nearest,
-                ..Default::default()
-            })
-        };
-        self.world.insert_resource(SpritePipeline::new(renderer));
-
-        self.world
-            .insert_resource(DefaultImageSampler(Arc::new(default_sampler)));
-        self.schedule
-            .add_system(prepare_sprites_for_batching.in_base_set(CoreSet::PrepareRenderer));
-
-        self.schedule
-            .add_system(prepare_shapes_for_batching.in_base_set(CoreSet::PrepareRenderer));
-
-        self.schedule
-            .add_system(prepare_text_for_batching.in_base_set(CoreSet::PrepareRenderer));
-
-        self = self.add_editor_system(debug_collider_picker);
-
-        let sprite_batch_resource: Vec<PreparedRenderItem> = Vec::new();
-
-        self.world
-            .insert_resource(ResourceVec::new(sprite_batch_resource));
-
-        self
-    }
-}
-
-#[derive(Resource)]
-pub struct SpritePipeline {
+pub struct MeshPipeline {
     pub render_pipeline: RenderPipeline,
     pub texture_bind_group_layout: BindGroupLayout,
     pub camera_bind_group_layout: BindGroupLayout,
 }
 
-impl SpritePipeline {
+impl MeshPipeline {
     pub fn new(renderer: &Renderer) -> Self {
         let shader = renderer
             .device
-            .create_shader_module(include_wgsl!("../shaders/2d.wgsl"));
+            .create_shader_module(include_wgsl!("../shaders/mesh.wgsl"));
 
         let texture_bind_group_layout =
             renderer
@@ -122,7 +76,7 @@ impl SpritePipeline {
             renderer
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("2D Render Pipeline Layout"),
+                    label: Some("Mesh Render Pipeline Layout"),
                     bind_group_layouts: &[&camera_bind_group_layout, &texture_bind_group_layout],
                     push_constant_ranges: &[],
                 });
@@ -135,7 +89,7 @@ impl SpritePipeline {
         let descriptor = RenderPipelineDescriptor {
             vertex: VertexState {
                 entry_point: "vertex",
-                buffers: &[Vertex::desc()],
+                buffers: &[MeshVertex::desc()],
                 module: &shader,
             },
             fragment: Some(FragmentState {
@@ -168,5 +122,49 @@ impl SpritePipeline {
             texture_bind_group_layout,
             camera_bind_group_layout,
         }
+    }
+}
+
+impl App {
+    pub fn initialize_mesh_rendering(mut self) -> Self {
+        let renderer = self.world.get_resource::<Renderer>().unwrap();
+
+        self.world.insert_resource(MeshPipeline::new(renderer));
+
+        let renderer = self.world.get_resource::<Renderer>().unwrap();
+
+        self.world.insert_resource(DebugMeshPipeline::new(renderer));
+
+        let prepared_mesh_resource: Vec<PreparedMeshItem> = Vec::new();
+
+        self.world
+            .insert_resource(ResourceVec::new(prepared_mesh_resource));
+
+        let prepared_debug_mesh_resource: Vec<PreparedDebugMeshItem> = Vec::new();
+
+        self.world
+            .insert_resource(ResourceVec::new(prepared_debug_mesh_resource));
+
+        let debug_mesh_resource: Vec<DebugMesh> = Vec::new();
+
+        self.world
+            .insert_resource(ResourceVec::new(debug_mesh_resource));
+
+        self.schedule
+            .add_system(prepare_camera_3d_bindgroup.in_base_set(CoreSet::PrepareRenderer));
+
+        self.schedule.add_system(
+            prepare_mesh_to_render
+                .in_base_set(CoreSet::PrepareRenderer)
+                .after(prepare_camera_3d_bindgroup),
+        );
+
+        self.schedule.add_system(
+            prepare_debug_mesh_to_render
+                .in_base_set(CoreSet::PrepareRenderer)
+                .after(prepare_camera_3d_bindgroup),
+        );
+
+        self
     }
 }

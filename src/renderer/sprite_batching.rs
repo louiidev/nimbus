@@ -9,7 +9,7 @@ use hashbrown::HashMap;
 use wgpu::{util::DeviceExt, RenderPass};
 
 use crate::{
-    camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID},
+    camera::{Camera, CameraBindGroupType, CameraUniform},
     components::sprite::Sprite,
     resources::utils::{Assets, ResourceVec},
     transform::{GlobalTransform, Transform},
@@ -18,7 +18,7 @@ use crate::{
 use super::{
     plugin_2d::{DefaultImageSampler, SpritePipeline},
     texture::Texture,
-    RenderBatchItem, RenderBatchMeta, Renderer, Vertex, QUAD_INDICES, QUAD_UVS,
+    PreparedRenderItem, RenderBatchMeta, Renderer, Vertex, QUAD_INDICES, QUAD_UVS,
     QUAD_VERTEX_POSITIONS,
 };
 
@@ -28,7 +28,7 @@ pub fn prepare_sprites_for_batching(
     sprite_assets: Res<Assets<Texture>>,
     sprite_pipeline: Res<SpritePipeline>,
     default_sampler: Res<DefaultImageSampler>,
-    mut sprite_batch: ResMut<ResourceVec<RenderBatchItem>>,
+    mut sprite_batch: ResMut<ResourceVec<PreparedRenderItem>>,
     mut camera: Query<(&mut Camera, &mut GlobalTransform), Without<Sprite>>,
 ) {
     let (mut camera, global_transform) = camera.get_single_mut().unwrap();
@@ -63,7 +63,7 @@ pub fn prepare_sprites_for_batching(
         });
 
     camera.bind_groups.insert(
-        ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID,
+        CameraBindGroupType::Orthographic,
         Arc::new(camera_bind_group),
     );
 
@@ -140,7 +140,7 @@ pub fn prepare_sprites_for_batching(
         }
     }
 
-    let mut sprite_batches: Vec<RenderBatchItem> = batches
+    let mut sprite_batches: Vec<PreparedRenderItem> = batches
         .iter()
         .map(|batch| {
             let vertex_buffer =
@@ -181,12 +181,12 @@ pub fn prepare_sprites_for_batching(
                         label: Some("diffuse_bind_group"),
                     });
 
-            RenderBatchItem {
+            PreparedRenderItem {
                 vertex_buffer,
                 index_buffer,
                 texture_bind_group,
                 indices_len: batch.indices.len() as _,
-                camera_bind_group_id: ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID,
+                camera_bind_group_id: CameraBindGroupType::Orthographic,
             }
         })
         .collect();
@@ -195,10 +195,10 @@ pub fn prepare_sprites_for_batching(
 }
 
 pub fn render_sprite_batches<'a>(
-    sprite_batch: &'a Vec<RenderBatchItem>,
+    sprite_batch: &'a Vec<PreparedRenderItem>,
     render_pass: &mut RenderPass<'a>,
     sprite_pipeline: &'a SpritePipeline,
-    camera_bind_group: &'a HashMap<u8, Arc<wgpu::BindGroup>>,
+    camera_bind_group: &'a HashMap<CameraBindGroupType, Arc<wgpu::BindGroup>>,
 ) {
     render_pass.set_pipeline(&sprite_pipeline.render_pipeline);
 

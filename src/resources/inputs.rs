@@ -75,8 +75,8 @@ pub fn input_system(
             .map(|ray| ray.origin.truncate());
 
         if let Some(mouse_pos) = mouse_pos {
-            input_controller.mouse_position.x = mouse_pos.x as f32;
-            input_controller.mouse_position.y = mouse_pos.y as f32;
+            input_controller.mouse_position.x = mouse_pos.x;
+            input_controller.mouse_position.y = mouse_pos.y;
         }
 
         input_controller.screen_mouse_position.x = position.x as f32;

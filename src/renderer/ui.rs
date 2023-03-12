@@ -8,7 +8,7 @@ use glam::{Vec2, Vec3};
 use wgpu::util::DeviceExt;
 
 use crate::{
-    camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID},
+    camera::{Camera, CameraBindGroupType, CameraUniform},
     resources::utils::{Assets, ResourceVec},
     transform::Transform,
     ui::{UiHandler, UiVertex},
@@ -18,7 +18,7 @@ use crate::{
 use super::{
     plugin_2d::{DefaultImageSampler, SpritePipeline},
     texture::Texture,
-    RenderBatchItem, RenderBatchMeta, Renderer,
+    PreparedRenderItem, RenderBatchMeta, Renderer,
 };
 
 pub fn prepare_ui_for_batching(
@@ -27,7 +27,7 @@ pub fn prepare_ui_for_batching(
     sprite_assets: Res<Assets<Texture>>,
     sprite_pipeline: Res<SpritePipeline>,
     default_sampler: Res<DefaultImageSampler>,
-    mut layout_batches: ResMut<ResourceVec<RenderBatchItem>>,
+    mut layout_batches: ResMut<ResourceVec<PreparedRenderItem>>,
     mut camera: Query<(&mut Camera)>,
 ) {
     let mut camera = camera.get_single_mut().unwrap();
@@ -67,7 +67,7 @@ pub fn prepare_ui_for_batching(
         });
 
     camera.bind_groups.insert(
-        ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID,
+        CameraBindGroupType::OrthographicUI,
         Arc::new(camera_bind_group),
     );
 
@@ -100,7 +100,7 @@ pub fn prepare_ui_for_batching(
         }
     }
 
-    let mut batches: Vec<RenderBatchItem> = batches
+    let mut batches: Vec<PreparedRenderItem> = batches
         .iter()
         .map(|batch| {
             let vertex_buffer =
@@ -144,12 +144,12 @@ pub fn prepare_ui_for_batching(
                         label: Some("diffuse_bind_group"),
                     });
 
-            RenderBatchItem {
+            PreparedRenderItem {
                 vertex_buffer,
                 index_buffer,
                 texture_bind_group,
                 indices_len: batch.indices.len() as _,
-                camera_bind_group_id: ORTHOGRAPHIC_PROJECTION_UI_BIND_GROUP_ID,
+                camera_bind_group_id: CameraBindGroupType::OrthographicUI,
             }
         })
         .collect();
@@ -160,7 +160,7 @@ pub fn prepare_ui_for_batching(
 impl App {
     pub fn init_ui_renderer(mut self) -> Self {
         self.schedule
-            .add_system(prepare_ui_for_batching.in_set(CoreSet::PrepareRenderer));
+            .add_system(prepare_ui_for_batching.in_base_set(CoreSet::PrepareRenderer));
 
         self
     }

@@ -1,4 +1,12 @@
-use glam::Vec2;
+use glam::{Vec2, Vec3};
+
+use crate::{
+    color::Color,
+    renderer::{
+        debug_drawing::{DebugMesh, DebugMeshVertex},
+        QUAD_INDICES, QUAD_UVS,
+    },
+};
 
 /// A rectangle defined by two opposite corners.
 ///
@@ -299,6 +307,47 @@ impl Rect {
         // height() never return a negative value.
         r.min = r.min.min(r.max);
         r
+    }
+}
+
+impl From<Rect> for DebugMesh {
+    fn from(rect: Rect) -> Self {
+        let color = Color::GREEN.as_rgba_f32();
+
+        // pub const QUAD_VERTEX_POSITIONS: [Vec2; 4] = [
+        //     Vec2::new(-0.5, -0.5),
+        //     Vec2::new(0.5, -0.5),
+        //     Vec2::new(0.5, 0.5),
+        //     Vec2::new(-0.5, 0.5),
+        // ];
+
+        let verts = vec![
+            DebugMeshVertex {
+                position: rect.min.extend(1.).into(),
+                color,
+            },
+            DebugMeshVertex {
+                position: Vec3::new(rect.max.x, rect.min.y, 0.).into(),
+                color,
+            },
+            DebugMeshVertex {
+                position: rect.max.extend(1.).into(),
+                color,
+            },
+            DebugMeshVertex {
+                position: Vec3::new(rect.min.x, rect.max.y, 0.).into(),
+                color,
+            },
+            DebugMeshVertex {
+                position: rect.min.extend(1.).into(),
+                color,
+            },
+        ];
+
+        DebugMesh {
+            vertices: verts,
+            indices: QUAD_INDICES.to_vec(),
+        }
     }
 }
 

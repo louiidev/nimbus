@@ -1,15 +1,20 @@
 use bevy_ecs::{
     prelude::{Component, Entity},
     query::{Changed, Without},
-    system::{Local, Query, Res},
+    system::{Local, Query, Res, ResMut},
 };
 use glam::Vec2;
 
 use crate::{
     camera::Camera,
     color::Color,
+    components::sprite::Anchor,
     rect::Rect,
-    resources::inputs::InputController,
+    renderer::{debug_drawing::DebugMesh, texture::Texture},
+    resources::{
+        inputs::InputController,
+        utils::{Assets, ResourceVec},
+    },
     transform::{self, GlobalTransform, Transform},
     utils::collision,
 };
@@ -67,6 +72,8 @@ pub fn debug_collider_picker(
     mut query: Query<(&mut Sprite, &Transform, Entity)>,
     mut picked: Local<PickedEntity>,
     input_controller: Res<InputController>,
+    textures: Res<Assets<Texture>>,
+    mut debug_meshes: ResMut<ResourceVec<DebugMesh>>,
 ) {
     let mouse_just_pressed = input_controller
         .mouse_button_inputs
@@ -76,33 +83,42 @@ pub fn debug_collider_picker(
         .mouse_button_inputs
         .pressed(winit::event::MouseButton::Left);
 
-    if picked.entity.is_none() && !mouse_just_pressed || picked.entity.is_some() && mouse_down {
-        return;
-    }
-
     for (mut sprite, transform, entity) in query.iter_mut() {
-        let sprite_rect = sprite.texture_rect.unwrap_or(Rect::default());
-        let sprite_pos = transform.translation.truncate();
+        let texture = textures.data.get(&sprite.texture_id).unwrap();
+        let current_image_size =
+            Vec2::new(texture.dimensions.0 as f32, texture.dimensions.1 as f32);
 
-        if mouse_just_pressed {
-            dbg!(sprite_rect.size() * transform.scale.truncate(), sprite_pos);
+        // By default, the size of the quad is the size of the texture
+        let mut quad_size = current_image_size;
+
+        // If a rect is specified, adjust UVs and the size of the quad
+        if let Some(rect) = sprite.texture_rect {
+            quad_size = rect.size();
         }
 
-        if mouse_just_pressed
-            && collision::rect_contains_point(
-                sprite_rect.size() * transform.scale.truncate(),
-                sprite_pos,
-                input_controller.mouse_position,
-            )
-        {
-            sprite.color = Color::BLUE;
-            picked.entity = Some((
-                entity,
-                Rect {
-                    min: sprite_pos + sprite_rect.min,
-                    max: sprite_pos + sprite_rect.max,
-                },
-            ));
+        // Override the size if a custom one is specified
+        if let Some(custom_size) = sprite.custom_size {
+            quad_size = custom_size;
+        }
+
+        let sprite_pos = transform.translation.truncate();
+
+        let quad_size = quad_size * transform.scale.truncate();
+
+        let rect = Rect {
+            min: sprite_pos - quad_size / 2.,
+            max: sprite_pos + quad_size / 2.,
+        };
+
+        if let Some(picked) = picked.entity {
+            debug_meshes.values.push(DebugMesh::from(picked.1));
+        }
+
+        if collision::rect_contains_point(rect.size(), rect.min, input_controller.mouse_position) {
+            dbg!(rect.size(), rect.min);
+
+            sprite.color = Color::new(sprite.color.red, sprite.color.green, sprite.color.blue, 0.5);
+            picked.entity = Some((entity, rect));
             return;
         }
     }

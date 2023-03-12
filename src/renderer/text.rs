@@ -8,7 +8,7 @@ use glam::Vec2;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    camera::{Camera, CameraUniform, ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID},
+    camera::{Camera, CameraUniform},
     components::text::Text,
     font::FontData,
     font_atlas::FontAtlasSet,
@@ -22,7 +22,7 @@ use crate::{
 use super::{
     plugin_2d::{DefaultImageSampler, SpritePipeline},
     texture::Texture,
-    RenderBatchItem, RenderBatchMeta, Renderer, Vertex, QUAD_INDICES, QUAD_UVS,
+    PreparedRenderItem, RenderBatchMeta, Renderer, Vertex, QUAD_INDICES, QUAD_UVS,
     QUAD_VERTEX_POSITIONS,
 };
 
@@ -36,7 +36,7 @@ pub fn prepare_text_for_batching(
     fonts: Res<Assets<FontData>>,
     sprite_pipeline: Res<SpritePipeline>,
     default_sampler: Res<DefaultImageSampler>,
-    mut sprite_batch: ResMut<ResourceVec<RenderBatchItem>>,
+    mut sprite_batch: ResMut<ResourceVec<PreparedRenderItem>>,
     mut camera: Query<(&mut Camera, &mut GlobalTransform), Without<Text>>,
 ) {
     let (mut camera, global_transform) = camera.get_single_mut().unwrap();
@@ -71,7 +71,7 @@ pub fn prepare_text_for_batching(
         });
 
     camera.bind_groups.insert(
-        ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID,
+        crate::camera::CameraBindGroupType::Orthographic,
         Arc::new(camera_bind_group),
     );
 
@@ -135,7 +135,7 @@ pub fn prepare_text_for_batching(
         }
     }
 
-    let mut sprite_batches: Vec<RenderBatchItem> = batches
+    let mut sprite_batches: Vec<PreparedRenderItem> = batches
         .iter()
         .map(|batch| {
             let vertex_buffer =
@@ -176,12 +176,12 @@ pub fn prepare_text_for_batching(
                         label: Some("diffuse_bind_group"),
                     });
 
-            RenderBatchItem {
+            PreparedRenderItem {
                 vertex_buffer,
                 index_buffer,
                 texture_bind_group,
                 indices_len: batch.indices.len() as _,
-                camera_bind_group_id: ORTHOGRAPHIC_PROJECTION_BIND_GROUP_ID,
+                camera_bind_group_id: crate::camera::CameraBindGroupType::Orthographic,
             }
         })
         .collect();

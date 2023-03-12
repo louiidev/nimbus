@@ -66,34 +66,34 @@ pub use glam as math;
 pub use winit;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+#[system_set(base)]
 pub enum CoreSet {
-    /// The [`Stage`](bevy_ecs::schedule::Stage) that runs before all other app stages.
+    /// Runs before all other members of this set.
     First,
-    /// The [`Stage`](bevy_ecs::schedule::Stage) that runs before [`CoreSet::Update`].
+    /// The copy of [`apply_system_buffers`] that runs immediately after `First`.
+    FirstFlush,
+    /// Runs before [`CoreSet::Update`].
     PreUpdate,
-    /// The [`Stage`](bevy_ecs::schedule::Stage) responsible for doing most app logic. Systems should be registered here by default.
+    /// The copy of [`apply_system_buffers`] that runs immediately after `PreUpdate`.
+    PreUpdateFlush,
+    /// Applies [`State`](bevy_ecs::schedule::State) transitions
+    StateTransitions,
+    /// Responsible for doing most app logic. Systems should be registered here by default.
     Update,
-    /// The [`Stage`](bevy_ecs::schedule::Stage) that runs after [`CoreSet::Update`].
+    /// The copy of [`apply_system_buffers`] that runs immediately after `Update`.
+    UpdateFlush,
+    /// Runs after [`CoreSet::Update`].
     PostUpdate,
+    /// The copy of [`apply_system_buffers`] that runs immediately after `PostUpdate`.
+    PostUpdateFlush,
     PrepareRenderer,
+    PrepareRendererFlush,
     Render,
-    /// Cleanup render cache that runs after [`CoreSet::Render`].
-    PostRender,
-}
-
-impl CoreSet {
-    /// The sets defined in this enum are configured to run in order,
-    pub fn base_schedule() -> Schedule {
-        use CoreSet::*;
-        let mut schedule = Schedule::new();
-
-        // Create "stage-like" structure using buffer flushes + ordering
-        schedule.configure_set(Update.after(PreUpdate).before(PostUpdate));
-        schedule.configure_set(PrepareRenderer.after(PostUpdate).before(Render));
-        schedule.configure_set(PostRender.after(Render));
-
-        schedule
-    }
+    RenderFlush,
+    /// Runs after all other members of this set.
+    Last,
+    /// The copy of [`apply_system_buffers`] that runs immediately after `Last`.
+    LastFlush,
 }
 
 // TODO: move this
@@ -161,17 +161,22 @@ impl App {
         self.init_resource::<InputController>();
 
         self.init_resource::<Time>();
-        self.add_internal_system(render_system.in_set(CoreSet::Render))
-            .add_internal_system(transform_propagate_system.in_set(CoreSet::PostUpdate))
-            .add_internal_system(crate::camera::camera_system.in_set(CoreSet::PreUpdate))
-            .add_internal_system(input_system.in_set(CoreSet::PreUpdate))
-            .add_internal_system(
-                upload_images_to_gpu
-                    .in_set(CoreSet::PostUpdate)
-                    .before(CoreSet::PrepareRenderer),
-            )
-            .init_2d_renderer()
-            .init_ui_renderer()
+        self.add_internal_system(
+            render_system
+                .in_base_set(CoreSet::Render)
+                .after(CoreSet::PrepareRenderer),
+        )
+        .add_internal_system(transform_propagate_system.in_base_set(CoreSet::PostUpdate))
+        .add_internal_system(crate::camera::camera_system.in_base_set(CoreSet::PreUpdate))
+        .add_internal_system(input_system.in_base_set(CoreSet::PreUpdate))
+        .add_internal_system(
+            upload_images_to_gpu
+                .in_base_set(CoreSet::PostUpdate)
+                .before(CoreSet::PrepareRenderer),
+        )
+        .init_2d_renderer()
+        .init_ui_renderer()
+        .initialize_mesh_rendering()
     }
 
     pub fn init_resource<R: Resource + FromWorld>(&mut self) -> &mut Self {
@@ -196,7 +201,7 @@ impl App {
         if !self.world.contains_resource::<Events<T>>() {
             self.init_resource::<Events<T>>()
                 .schedule
-                .add_system(Events::<T>::update_system.in_set(CoreSet::First));
+                .add_system(Events::<T>::update_system.in_base_set(CoreSet::First));
         }
         self
     }
@@ -215,11 +220,43 @@ impl App {
             window_size.height as f32,
         )));
 
+        let mut schedule = Schedule::default();
+        use CoreSet::*;
+        schedule
+            .set_default_base_set(Update)
+            .add_system(apply_system_buffers.in_base_set(FirstFlush))
+            .add_system(apply_system_buffers.in_base_set(PreUpdateFlush))
+            .add_system(apply_system_buffers.in_base_set(UpdateFlush))
+            .add_system(apply_system_buffers.in_base_set(PostUpdateFlush))
+            .add_system(apply_system_buffers.in_base_set(PrepareRendererFlush))
+            .add_system(apply_system_buffers.in_base_set(RenderFlush))
+            .add_system(apply_system_buffers.in_base_set(LastFlush))
+            .configure_sets(
+                (
+                    First,
+                    FirstFlush,
+                    PreUpdate,
+                    PreUpdateFlush,
+                    StateTransitions,
+                    Update,
+                    UpdateFlush,
+                    PostUpdate,
+                    PostUpdateFlush,
+                    PrepareRenderer,
+                    PrepareRendererFlush,
+                    Render,
+                    RenderFlush,
+                    Last,
+                    LastFlush,
+                )
+                    .chain(),
+            );
+
         let app = App {
             window: winit_window,
             world,
             event_loop: Some(event_loop),
-            schedule: Schedule::default(),
+            schedule,
         };
 
         app.add_default_system_resources().add_assets()
@@ -239,8 +276,11 @@ impl App {
 
     pub fn add_system<Params>(mut self, system: impl IntoSystemConfig<Params>) -> Self {
         #[cfg(debug_assertions)]
-        self.schedule
-            .add_system(system.in_set(CoreSet::Update).run_if(not(run_if_game_mode)));
+        self.schedule.add_system(
+            system
+                .in_base_set(CoreSet::Update)
+                .run_if(not(run_if_game_mode)),
+        );
 
         #[cfg(not(debug_assertions))]
         self.schedule.add_system(system.in_set(CoreSet::Update));
@@ -256,7 +296,8 @@ impl App {
 
     pub fn add_global_system<Params>(mut self, system: impl IntoSystemConfig<Params>) -> Self {
         #[cfg(debug_assertions)]
-        self.schedule.add_system(system.in_set(CoreSet::Update));
+        self.schedule
+            .add_system(system.in_base_set(CoreSet::Update));
         self
     }
 
