@@ -7,7 +7,7 @@ use crate::{
     DEFAULT_FONT_ID,
 };
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct Text {
     pub alignment: TextAlignment,
     pub value: String,
@@ -48,8 +48,17 @@ pub struct TextBundle {
     pub global_transform: GlobalTransform,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct TextTheme {
     pub font_size: f32,
     pub color: Color,
+}
+
+impl Default for TextTheme {
+    fn default() -> Self {
+        Self {
+            font_size: 24f32,
+            color: Color::WHITE,
+        }
+    }
 }

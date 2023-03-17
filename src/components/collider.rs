@@ -110,16 +110,14 @@ pub fn debug_collider_picker(
             max: sprite_pos + quad_size / 2.,
         };
 
-        if let Some(picked) = picked.entity {
-            debug_meshes.values.push(DebugMesh::from(picked.1));
-        }
+        // if let Some(picked) = picked.entity {
+        //     debug_meshes.values.push(DebugMesh::from(picked.1));
+        // }
 
-        if collision::rect_contains_point(rect.size(), rect.min, input_controller.mouse_position) {
-            dbg!(rect.size(), rect.min);
-
-            sprite.color = Color::new(sprite.color.red, sprite.color.green, sprite.color.blue, 0.5);
-            picked.entity = Some((entity, rect));
-            return;
-        }
+        // if collision::rect_contains_point(rect.size(), rect.min, input_controller.mouse_position) {
+        //     sprite.color = Color::new(sprite.color.red, sprite.color.green, sprite.color.blue, 0.5);
+        //     picked.entity = Some((entity, rect));
+        //     return;
+        // }
     }
 }

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bevy_ecs::{
     prelude::*,
     schedule::Schedule,
@@ -39,6 +41,9 @@ pub const DEFAULT_TEXTURE_ID: uuid::Uuid =
 pub const DEFAULT_FONT_ID: uuid::Uuid =
     uuid::Uuid::from_u128(0xa1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d9u128);
 
+const TOGGLE_TRIANGLE_TEXTURE_ID: uuid::Uuid =
+    uuid::Uuid::from_u128(0xa1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d1u128);
+
 pub mod camera;
 pub mod color;
 pub mod components;
@@ -63,6 +68,7 @@ pub mod utils;
 
 pub use bevy_ecs as ecs;
 pub use glam as math;
+pub use hashbrown;
 pub use winit;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
@@ -140,6 +146,27 @@ impl App {
         );
         self.load_texture_with_id_image(image, DEFAULT_TEXTURE_ID);
 
+        self.load_texture_with_id(
+            include_bytes!("./default_assets/toggle_triangle.png"),
+            TOGGLE_TRIANGLE_TEXTURE_ID,
+        );
+
+        let renderer = self.world.get_resource::<Renderer>().unwrap();
+
+        let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
+        let mut resource = self.world.get_resource_mut::<Assets<Texture>>().unwrap();
+
+        resource
+            .get_mut(&TOGGLE_TRIANGLE_TEXTURE_ID)
+            .unwrap()
+            .sampler = Some(Arc::new(sampler));
+
         let font =
             FontData::try_from_bytes(include_bytes!("./default_assets/FiraSans-Bold.ttf")).unwrap();
 
@@ -192,6 +219,17 @@ impl App {
 
     pub fn add_asset<T: Send + Sync + 'static>(&mut self) {
         self.world.insert_resource::<Assets<T>>(Assets::new());
+    }
+
+    pub fn insert_asset<T: Send + Sync + 'static>(&mut self, id: uuid::Uuid, resource: T) {
+        if !self.world.is_resource_added::<Assets<T>>() {
+            self.add_asset::<T>();
+        }
+        self.world
+            .get_resource_mut::<Assets<T>>()
+            .unwrap()
+            .data
+            .insert(id, resource);
     }
 
     pub fn add_event<T>(&mut self) -> &mut Self

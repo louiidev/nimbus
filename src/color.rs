@@ -207,6 +207,73 @@ impl Color {
             alpha,
         }
     }
+
+    pub fn hex<T: AsRef<str>>(hex: T) -> Color {
+        let hex = hex.as_ref();
+        let hex = hex.strip_prefix('#').unwrap_or(hex);
+
+        match *hex.as_bytes() {
+            // RGB
+            [r, g, b] => {
+                let [r, g, b, ..] = decode_hex([r, r, g, g, b, b]);
+                Color::rgb_u8(r, g, b)
+            }
+            // RGBA
+            [r, g, b, a] => {
+                let [r, g, b, a, ..] = decode_hex([r, r, g, g, b, b, a, a]);
+                Color::rgba_u8(r, g, b, a)
+            }
+            // RRGGBB
+            [r1, r2, g1, g2, b1, b2] => {
+                let [r, g, b, ..] = decode_hex([r1, r2, g1, g2, b1, b2]);
+                Color::rgb_u8(r, g, b)
+            }
+            // RRGGBBAA
+            [r1, r2, g1, g2, b1, b2, a1, a2] => {
+                let [r, g, b, a, ..] = decode_hex([r1, r2, g1, g2, b1, b2, a1, a2]);
+                Color::rgba_u8(r, g, b, a)
+            }
+            _ => panic!("Incorrect length"),
+        }
+    }
+}
+
+/// Converts hex bytes to an array of RGB\[A\] components
+///
+/// # Example
+/// For RGB: *b"ffffff" -> [255, 255, 255, ..]
+/// For RGBA: *b"E2E2E2FF" -> [226, 226, 226, 255, ..]
+const fn decode_hex<const N: usize>(mut bytes: [u8; N]) -> [u8; N] {
+    let mut i = 0;
+    while i < bytes.len() {
+        // Convert single hex digit to u8
+        let val = match hex_value(bytes[i]) {
+            Ok(val) => val,
+            Err(byte) => panic!("unknow byte"),
+        };
+        bytes[i] = val;
+        i += 1;
+    }
+    // Modify the original bytes to give an `N / 2` length result
+    i = 0;
+    while i < bytes.len() / 2 {
+        // Convert pairs of u8 to R/G/B/A
+        // e.g `ff` -> [102, 102] -> [15, 15] = 255
+        bytes[i] = bytes[i * 2] * 16 + bytes[i * 2 + 1];
+        i += 1;
+    }
+    bytes
+}
+
+/// Parse a single hex digit (a-f/A-F/0-9) as a `u8`
+const fn hex_value(b: u8) -> Result<u8, u8> {
+    match b {
+        b'0'..=b'9' => Ok(b - b'0'),
+        b'A'..=b'F' => Ok(b - b'A' + 10),
+        b'a'..=b'f' => Ok(b - b'a' + 10),
+        // Wrong hex digit
+        _ => Err(b),
+    }
 }
 
 impl Default for Color {

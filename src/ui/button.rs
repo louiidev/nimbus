@@ -10,7 +10,7 @@ use crate::{
     DEFAULT_TEXTURE_ID,
 };
 
-use super::{id::Id, widget::WidgetResponse, UiHandler, UiVertex, Widget};
+use super::{id::Id, widget::WidgetResponse, UiHandler, UiVertex};
 
 #[derive(Default)]
 pub struct Button<'a> {
@@ -22,11 +22,9 @@ pub struct Button<'a> {
     pub id: Id,
 }
 
-impl<'a> Widget for Button<'a> {
-    fn ui(&mut self, ui: &mut UiHandler) -> super::widget::WidgetResponse {
-        if self.id == Id::default() {
-            self.id = ui.generate_id();
-        }
+impl<'a> Button<'a> {
+    pub fn ui(&mut self, ui: &mut UiHandler) -> super::widget::WidgetResponse {
+        self.id = UiHandler::generate_id(self.text, "button");
 
         self.position = ui.get_next_widget_position();
         let size = Vec2::new(250., 100.);
@@ -151,13 +149,4 @@ impl Default for ButtonTheme {
             font_size: 32.,
         }
     }
-}
-
-#[test]
-fn aabb() {
-    let id = 1;
-
-    let a = Some(id);
-
-    assert_eq!(Some(id), a);
 }

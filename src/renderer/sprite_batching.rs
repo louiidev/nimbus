@@ -84,6 +84,12 @@ pub fn prepare_sprites_for_batching(
 
     for (sprite, transform, _) in query {
         let mut uvs = QUAD_UVS;
+        if sprite.flip_x {
+            uvs = [uvs[1], uvs[0], uvs[3], uvs[2]];
+        }
+        if sprite.flip_y {
+            uvs = [uvs[3], uvs[2], uvs[1], uvs[0]];
+        }
 
         let mut vertices = Vec::new();
 
@@ -163,6 +169,8 @@ pub fn prepare_sprites_for_batching(
 
             let texture = sprite_assets.data.get(&batch.texture_id).unwrap();
 
+            let sampler = texture.sampler.as_ref().unwrap_or(&default_sampler.0);
+
             let texture_bind_group =
                 renderer
                     .device
@@ -175,7 +183,7 @@ pub fn prepare_sprites_for_batching(
                             },
                             wgpu::BindGroupEntry {
                                 binding: 1,
-                                resource: wgpu::BindingResource::Sampler(&default_sampler.0),
+                                resource: wgpu::BindingResource::Sampler(sampler),
                             },
                         ],
                         label: Some("diffuse_bind_group"),

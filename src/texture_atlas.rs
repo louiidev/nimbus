@@ -2,6 +2,7 @@ use glam::{IVec2, Vec2};
 
 use crate::{internal_image::Image, rect::Rect, resources::utils::Assets};
 
+#[derive(Clone)]
 pub struct TextureAtlas {
     texture_id: uuid::Uuid,
     /// The specific areas of the atlas where each texture can be found

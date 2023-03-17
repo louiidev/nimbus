@@ -1,12 +1,16 @@
-use std::f32::{MAX, MIN};
+use std::{
+    f32::{MAX, MIN},
+    string,
+};
 
 use bevy_ecs::system::Resource;
 use glam::{Mat4, Vec2, Vec3, Vec4Swizzles};
+use hashbrown::HashMap;
 use winit::event::MouseButton;
 
 use crate::{
     color::Color,
-    components::text::Text,
+    components::text::{Text, TextAlignment, TextTheme},
     font::FontData,
     font_atlas::FontAtlasSet,
     internal_image::Image,
@@ -22,13 +26,15 @@ use crate::{
 use self::{
     button::Button,
     id::Id,
-    layout::Layout,
-    widget::{Widget, WidgetResponse},
+    layout::{Layout, LayoutTheme},
+    toggle_area::ToggleArea,
+    widget::WidgetResponse,
 };
 
 pub mod button;
 pub mod id;
 pub mod layout;
+pub mod toggle_area;
 pub mod widget;
 
 #[repr(C)]
@@ -89,6 +95,7 @@ pub struct UiHandler {
     pub font_atlas: FontAtlasSet,
     pub(crate) fonts: Assets<FontData>,
     pub(crate) container_size: Vec2,
+    pub(crate) toggle_states: HashMap<Id, bool>,
 }
 
 impl Default for UiHandler {
@@ -104,6 +111,7 @@ impl Default for UiHandler {
             fonts: Assets::new(),
             texture_atlases_images: Assets::default(),
             container_size: Vec2::default(),
+            toggle_states: HashMap::default(),
         }
     }
 }
@@ -123,6 +131,7 @@ impl UiHandler {
             font_atlas: FontAtlasSet::default(),
             fonts: Assets::new(),
             container_size: window_size,
+            toggle_states: HashMap::default(),
         }
     }
 
@@ -149,16 +158,8 @@ impl UiHandler {
         }
     }
 
-    pub fn generate_id(&self) -> Id {
-        let last_index = self.current_layout.len() - 1;
-
-        let layout = self.get_current_layout();
-
-        Id::new(format!(
-            "Layout_index_{}_ui_count_{}",
-            last_index,
-            layout.ui_meta.len()
-        ))
+    pub fn generate_id(key: &str, widget_type: &str) -> Id {
+        Id::new(format!("Widget_{}_key_{}", widget_type, key))
     }
 
     pub fn get_current_layout_mut(&mut self) -> &mut Layout {
@@ -199,19 +200,67 @@ impl UiHandler {
     }
 
     pub fn button(&mut self, mut button: Button) -> WidgetResponse {
-        let response = button.ui(self);
-
-        response
+        button.ui(self)
     }
 
-    pub fn rect(&mut self, rect: Rect) {
-        let size = rect.size();
+    pub fn triangle(&mut self) {
+        let layout = self.get_current_layout_mut();
 
-        let transform = Transform::from_xyz(rect.min.x, rect.min.y, 1.0);
+        let layout_position = layout.position;
 
+        let mut vertices = Vec::new();
+
+        let transform = Transform::from_xyz(layout_position.x, layout_position.y, 1.0);
+
+        pub const TRI_VERTEX_POSITIONS: [Vec2; 3] = [
+            Vec2::new(-0.5, -0.5),
+            Vec2::new(0.5, 0.0),
+            Vec2::new(-0.5, 0.5),
+        ];
+
+        let size = 15f32;
+
+        let positions: [[f32; 3]; 3] = TRI_VERTEX_POSITIONS.map(|tri_pos| {
+            (transform // offset the center point so it renders top left
+                .transform_point(((tri_pos - Vec2::new(-0.5, -0.5)) * size).extend(1.)))
+            .into()
+        });
+
+        for i in 0..TRI_VERTEX_POSITIONS.len() {
+            vertices.push(UiVertex {
+                position: positions[i],
+                tex_coords: QUAD_UVS[i].into(),
+                color: Color::WHITE.into(),
+            });
+        }
+
+        let meta = RenderBatchMeta {
+            texture_id: DEFAULT_TEXTURE_ID,
+            vertices,
+            indices: [0, 1, 2].to_vec(),
+        };
+
+        layout.ui_meta.push(meta);
+    }
+
+    pub fn rect(
+        &mut self,
+        size: Vec2,
+        texture_id: uuid::Uuid,
+        rotation_angle: f32,
+        offset: Option<Vec2>,
+    ) {
+        let layout_position = self.get_next_widget_position() + offset.unwrap_or(Vec2::ZERO);
+        let mut transform = Transform::from_xyz(
+            layout_position.x + size.x / 2f32,
+            layout_position.y + size.y / 2f32,
+            1.0,
+        );
+        transform.rotate_z(rotation_angle.to_radians());
         let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
             (transform // offset the center point so it renders top left
-                .transform_point(((quad_pos - Vec2::new(-0.5, -0.5) ) * size).extend(1.)))
+                // TODO: make this a constant instead of doing the calculation every frame
+                .transform_point(((quad_pos) * size).extend(1.)))
             .into()
         });
 
@@ -226,14 +275,93 @@ impl UiHandler {
         }
 
         let meta = RenderBatchMeta {
-            texture_id: DEFAULT_TEXTURE_ID,
+            texture_id,
             vertices,
             indices: QUAD_INDICES.to_vec(),
         };
 
         let layout = self.get_current_layout_mut();
-
+        layout.push_widget(size);
         layout.ui_meta.push(meta);
+    }
+
+    pub fn measure_text(&mut self, text: Text, max_bounds: Option<Vec2>) -> Vec2 {
+        let font = self.fonts.get(&DEFAULT_FONT_ID).unwrap();
+        let rect = Rect {
+            min: Vec2::ZERO,
+            max: max_bounds.unwrap_or(self.container_size),
+        };
+        let text_glyphs = self.font_atlas.queue_text(
+            font,
+            &text,
+            &rect,
+            &mut self.texture_atlases,
+            &mut self.texture_atlases_images,
+            fontdue::layout::CoordinateSystem::PositiveYDown,
+        );
+
+        let mut size = Vec2::default();
+
+        for text_glyph in text_glyphs {
+            let glyph_size = text_glyph.rect.size();
+            // Get top left glyph pos
+            let glyph_position = text_glyph.position - -Vec2::new(-0.5, -0.5);
+
+            let x_distance = glyph_position.x - size.x;
+
+            let rect = Rect {
+                min: glyph_position,
+                max: glyph_position + glyph_size,
+            };
+
+            let actual_glyph_size = rect.size();
+
+            size.y = size.y.max(actual_glyph_size.y);
+            size.x += actual_glyph_size.x + x_distance;
+        }
+
+        size
+    }
+
+    pub fn panel_with_padding(
+        &mut self,
+        position: Vec2,
+        padding: f32,
+        callback: impl FnOnce(&mut Self),
+    ) {
+        self.layout_with_theme(
+            position,
+            0.0,
+            Some(LayoutTheme {
+                background_color: Color::MIDNIGHT_BLUE,
+            }),
+            callback,
+        )
+    }
+
+    pub fn panel(&mut self, position: Vec2, callback: impl FnOnce(&mut Self)) {
+        self.layout_with_theme(
+            position,
+            0.0,
+            Some(LayoutTheme {
+                background_color: Color::MIDNIGHT_BLUE,
+            }),
+            callback,
+        )
+    }
+
+    pub fn label(&mut self, text_value: &str) {
+        let position = self.get_next_widget_position();
+        let text = Text {
+            value: text_value.to_owned(),
+
+            ..Default::default()
+        };
+        self.text(text.clone(), position, None);
+
+        let text_size = self.measure_text(text, None);
+
+        self.get_current_layout_mut().push_widget(text_size);
     }
 
     pub fn text(&mut self, text: Text, position: Vec2, max_bounds: Option<Vec2>) {
@@ -244,7 +372,7 @@ impl UiHandler {
             max: max_bounds.unwrap_or(self.container_size),
         };
         let text_glyphs = self.font_atlas.queue_text(
-            &font,
+            font,
             &text,
             &rect,
             &mut self.texture_atlases,
@@ -309,20 +437,27 @@ impl UiHandler {
         // panic!("testing");
     }
 
-    pub fn layout<F>(&mut self, position: Vec2, padding: f32, mut callback: F)
-    where
-        // The closure takes no input and returns nothing.
-        F: FnMut(&mut Self),
-    {
-        self.begin(position, padding);
+    pub fn layout(&mut self, position: Vec2, padding: f32, callback: impl FnOnce(&mut Self)) {
+        self.layout_with_theme(position, padding, None, callback)
+    }
+
+    pub fn layout_with_theme(
+        &mut self,
+        position: Vec2,
+        padding: f32,
+        layout_theme: Option<LayoutTheme>,
+        callback: impl FnOnce(&mut Self),
+    ) {
+        self.begin(position, padding, layout_theme);
         callback(self);
         self.end_layout();
     }
 
-    pub fn begin(&mut self, position: Vec2, padding: f32) {
+    pub fn begin(&mut self, position: Vec2, padding: f32, theme: Option<LayoutTheme>) {
         let mut layout = Layout::default();
         layout.padding = padding;
         layout.position = position;
+        layout.layout_theme = theme;
 
         self.current_layout.push(layout);
     }

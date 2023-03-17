@@ -185,12 +185,7 @@ pub fn render_system(
                 view: &view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: clear_color.0.red as _,
-                        g: clear_color.0.green as _,
-                        b: clear_color.0.blue as _,
-                        a: 1f64,
-                    }),
+                    load: wgpu::LoadOp::Clear(clear_color.0.into()),
                     store: true,
                 },
             })],

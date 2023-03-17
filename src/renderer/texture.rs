@@ -1,11 +1,16 @@
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, sync::Arc};
+
+use wgpu::Sampler;
 
 use crate::internal_image::Image;
+
+use super::plugin_2d::DefaultImageSampler;
 
 pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub dimensions: (u32, u32),
+    pub(crate) sampler: Option<Arc<Sampler>>,
 }
 
 impl Texture {
@@ -61,6 +66,7 @@ impl Texture {
                 image.texture_descriptor.size.width,
                 image.texture_descriptor.size.height,
             ),
+            sampler: None,
         }
     }
 }

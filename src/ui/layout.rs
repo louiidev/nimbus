@@ -28,8 +28,12 @@ pub struct Layout {
 impl Layout {
     pub fn get_next_position(&self) -> Vec2 {
         match self.layout_type {
-            LayoutType::Horizontal => Vec2::new(self.current_size.x, self.position.y),
-            LayoutType::Vertical => Vec2::new(self.position.x, self.current_size.y),
+            LayoutType::Horizontal => {
+                Vec2::new(self.current_size.x + self.position.x, self.position.y)
+            }
+            LayoutType::Vertical => {
+                Vec2::new(self.position.x, self.current_size.y + self.position.y)
+            }
         }
     }
 

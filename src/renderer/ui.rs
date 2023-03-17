@@ -126,6 +126,8 @@ pub fn prepare_ui_for_batching(
                 .get(&batch.texture_id)
                 .unwrap_or_else(|| panic!("Missing texture id = {}", &batch.texture_id));
 
+            let sampler = texture.sampler.as_ref().unwrap_or(&default_sampler.0);
+
             let texture_bind_group =
                 renderer
                     .device
@@ -138,7 +140,7 @@ pub fn prepare_ui_for_batching(
                             },
                             wgpu::BindGroupEntry {
                                 binding: 1,
-                                resource: wgpu::BindingResource::Sampler(&default_sampler.0),
+                                resource: wgpu::BindingResource::Sampler(sampler),
                             },
                         ],
                         label: Some("diffuse_bind_group"),

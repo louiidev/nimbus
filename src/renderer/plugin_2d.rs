@@ -8,8 +8,13 @@ use wgpu::{
 };
 
 use crate::{
-    components::collider::debug_collider_picker, internal_image::ImageBindGroups,
-    resources::utils::ResourceVec, App, CoreSet,
+    components::{
+        animated_sprite::{self, animate_sprite},
+        collider::debug_collider_picker,
+    },
+    internal_image::ImageBindGroups,
+    resources::utils::ResourceVec,
+    App, CoreSet,
 };
 
 use super::{
@@ -49,6 +54,9 @@ impl App {
 
         self.schedule
             .add_system(prepare_text_for_batching.in_base_set(CoreSet::PrepareRenderer));
+
+        self.schedule
+            .add_system(animate_sprite.in_base_set(CoreSet::PostUpdate));
 
         self = self.add_editor_system(debug_collider_picker);
 

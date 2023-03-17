@@ -22,6 +22,10 @@ pub struct Sprite {
     pub color: Color,
     pub texture_rect: Option<Rect>,
     pub custom_size: Option<Vec2>,
+    /// Flip the sprite along the `X` axis
+    pub flip_x: bool,
+    /// Flip the sprite along the `Y` axis
+    pub flip_y: bool,
 }
 
 impl Default for Sprite {
@@ -32,6 +36,8 @@ impl Default for Sprite {
             color: Color::WHITE,
             texture_rect: None,
             custom_size: None,
+            flip_x: false,
+            flip_y: false,
         }
     }
 }
@@ -44,6 +50,8 @@ impl Sprite {
             color: Color::WHITE,
             texture_rect: None,
             custom_size: None,
+            flip_x: false,
+            flip_y: false,
         }
     }
 }
