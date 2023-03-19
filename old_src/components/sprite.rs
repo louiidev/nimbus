@@ -1,16 +1,21 @@
+use crate::{
+    color::Color,
+    rect::Rect,
+    transform::{GlobalTransform, Transform},
+    DEFAULT_TEXTURE_ID,
+};
+
+use bevy_ecs::prelude::{Bundle, Component};
 use glam::Vec2;
 
-use crate::areana::ArenaId;
-
-use super::{color::Color, rect::Rect, transform::Transform};
-
-#[derive(Default, Debug)]
+#[derive(Bundle, Default, Debug)]
 pub struct SpriteBundle {
     pub sprite: Sprite,
     pub transform: Transform,
+    pub global_transform: GlobalTransform,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug)]
 pub struct Sprite {
     pub texture_id: ArenaId,
     pub anchor: Anchor,
@@ -26,7 +31,7 @@ pub struct Sprite {
 impl Default for Sprite {
     fn default() -> Self {
         Self {
-            texture_id: ArenaId::default(),
+            texture_id: DEFAULT_TEXTURE_ID,
             anchor: Anchor::default(),
             color: Color::WHITE,
             texture_rect: None,
