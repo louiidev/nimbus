@@ -1,18 +1,15 @@
-use bevy_ecs::prelude::{Bundle, Component};
 use fontdue::layout::{HorizontalAlign, VerticalAlign};
 
-use crate::{
-    color::Color,
-    transform::{GlobalTransform, Transform},
-    DEFAULT_FONT_ID,
-};
+use crate::areana::ArenaId;
 
-#[derive(Component, Clone)]
+use super::color::Color;
+
+#[derive(Clone)]
 pub struct Text {
     pub alignment: TextAlignment,
     pub value: String,
     pub theme: TextTheme,
-    pub font_id: uuid::Uuid,
+    pub font_id: ArenaId,
 }
 
 impl Default for Text {
@@ -21,7 +18,7 @@ impl Default for Text {
             alignment: TextAlignment::default(),
             value: String::default(),
             theme: TextTheme::default(),
-            font_id: DEFAULT_FONT_ID,
+            font_id: ArenaId::first(),
         }
     }
 }
@@ -39,13 +36,6 @@ impl Default for TextAlignment {
             horizontal: HorizontalAlign::Left,
         }
     }
-}
-
-#[derive(Bundle, Default)]
-pub struct TextBundle {
-    pub text: Text,
-    pub transform: Transform,
-    pub global_transform: GlobalTransform,
 }
 
 #[derive(Debug, Clone, Copy)]

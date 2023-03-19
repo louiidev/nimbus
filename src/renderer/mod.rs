@@ -1,75 +1,56 @@
-use bevy_ecs::{
-    prelude::Component,
-    system::{Query, Res, ResMut, Resource},
-};
+mod debug_mesh;
+pub mod drawing;
+pub mod font;
+pub(crate) mod mesh2d;
+pub(crate) mod pipelines;
+pub mod texture;
+pub mod ui;
 
-use glam::Vec2;
-use hashbrown::HashMap;
-use uuid::Uuid;
-use wgpu::{BindGroup, Buffer};
+use std::{collections::HashMap, sync::Arc};
+
+use glam::{UVec2, Vec3};
+use wgpu::{CommandEncoder, RenderPass, Sampler, SurfaceConfiguration, TextureSampleType};
 use winit::window::Window;
 
 use crate::{
-    camera::{Camera, CameraBindGroupType},
-    resources::utils::{Assets, ResourceVec},
-    time::Time,
-    ui::UiHandler,
-    ClearColor,
+    areana::{Arena, ArenaId},
+    camera::Camera,
+    components::color::Color,
+    systems::{prepare_render::prepare_mesh2d_for_batching, rendering::render_2d_batch},
 };
 
 use self::{
-    debug_drawing::{render_debug_meshes, DebugMeshPipeline, PreparedDebugMeshItem},
-    mesh::{render_meshes, PreparedMeshItem},
-    plugin_2d::SpritePipeline,
-    sprite_batching::render_sprite_batches,
-    texture::Texture,
+    debug_mesh::PreparedDebugMeshItem,
+    mesh2d::{setup_mesh2d_pipeline, Mesh2d, PreparedRenderItem, SpriteVertex},
+    pipelines::{Pipeline, PipelineType},
+    texture::{Texture, TextureSampler},
 };
 
-pub const QUAD_INDICES: [u16; 6] = [0, 2, 3, 0, 1, 2];
-
-pub const QUAD_VERTEX_POSITIONS: [Vec2; 4] = [
-    Vec2::new(-0.5, -0.5),
-    Vec2::new(0.5, -0.5),
-    Vec2::new(0.5, 0.5),
-    Vec2::new(-0.5, 0.5),
-];
-
-pub const QUAD_UVS: [Vec2; 4] = [
-    Vec2::new(0., 1.),
-    Vec2::new(1., 1.),
-    Vec2::new(1., 0.),
-    Vec2::new(0., 0.),
-];
-
-#[derive(Resource)]
 pub struct Renderer {
+    pub(crate) textures: Arena<Texture>,
+    pub(crate) device: wgpu::Device,
+    queue: wgpu::Queue,
     surface: wgpu::Surface,
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
-    pub size: winit::dpi::PhysicalSize<u32>,
-    pub default_font_id: Uuid,
+    surface_config: SurfaceConfiguration,
+    pub clear_color: Color,
+
+    pub(crate) viewport: UVec2,
+
+    pub(crate) render_pipelines: HashMap<PipelineType, Pipeline>,
+    pub(crate) texture_samplers: HashMap<TextureSampler, Arc<Sampler>>,
+    pub(crate) render_batch_2d: Vec<(Mesh2d<SpriteVertex>, Vec3)>,
+    pub(crate) render_batch_ui: Vec<PreparedRenderItem>,
+    // pub(crate) render_mesh_batch: Vec<PreparedMeshItem>,
+    pub(crate) render_batch_debug: Vec<PreparedDebugMeshItem>,
 }
-
-pub mod debug_drawing;
-pub(crate) mod mesh;
-pub mod mesh_pipeline;
-pub(crate) mod plugin_2d;
-pub mod prepare_camera_buffers;
-pub mod shapes;
-pub(crate) mod sprite_batching;
-pub mod text;
-pub mod texture;
-pub(crate) mod ui;
-
 impl Renderer {
-    pub async fn new(window: &Window, default_font_id: uuid::Uuid) -> Self {
+    pub async fn new(window: &Window, viewport: UVec2) -> Self {
         let size = window.inner_size();
-
-        // The instance is a handle to our GPU
-        // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(wgpu::Backends::all());
-        let surface = unsafe { instance.create_surface(window) };
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            dx12_shader_compiler: Default::default(),
+        });
+        let surface = unsafe { instance.create_surface(window) }.unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -77,7 +58,26 @@ impl Renderer {
                 force_fallback_adapter: false,
             })
             .await
-            .expect("Couldn't find adapter");
+            .unwrap();
+        let surface_caps = surface.get_capabilities(&adapter);
+        // Shader code in this tutorial assumes an Srgb surface texture. Using a different
+        // one will result all the colors comming out darker. If you want to support non
+        // Srgb surfaces, you'll need to account for that when drawing to the frame.
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| f.describe().srgb)
+            .unwrap_or(surface_caps.formats[0]);
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: size.width,
+            height: size.height,
+            present_mode: surface_caps.present_modes[0],
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: Vec::default(),
+        };
 
         let (device, queue) = adapter
             .request_device(
@@ -95,195 +95,132 @@ impl Renderer {
                 None, // Trace path
             )
             .await
-            .expect("Error requesting device");
+            .unwrap();
 
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface.get_supported_formats(&adapter)[0],
-            width: size.width,
-            height: size.height,
-            present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+        surface.configure(&device, &surface_config);
+
+        let default_sampler_nearest = {
+            device.create_sampler(&wgpu::SamplerDescriptor {
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            })
         };
-        surface.configure(&device, &config);
 
-        Renderer {
+        let default_sampler_linear = {
+            device.create_sampler(&wgpu::SamplerDescriptor {
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            })
+        };
+
+        let mut renderer = Self {
+            textures: Arena::new(),
             surface,
             device,
             queue,
-            config,
-            size,
-            default_font_id,
-        }
+            clear_color: Color::OLIVE,
+            render_pipelines: HashMap::default(),
+            render_batch_2d: Vec::default(),
+            render_batch_ui: Vec::default(),
+            // render_mesh_batch: Vec::default(),
+            render_batch_debug: Vec::default(),
+            texture_samplers: HashMap::from([
+                (TextureSampler::Linear, Arc::new(default_sampler_linear)),
+                (TextureSampler::Nearest, Arc::new(default_sampler_nearest)),
+            ]),
+            viewport,
+            surface_config,
+        };
+
+        renderer
+            .render_pipelines
+            .insert(PipelineType::Mesh2d, setup_mesh2d_pipeline(&renderer));
+
+        renderer
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        if new_size.width > 0 && new_size.height > 0 {
-            self.size = new_size;
-            self.config.width = new_size.width;
-            self.config.height = new_size.height;
-            self.surface.configure(&self.device, &self.config);
+    pub(crate) fn resize(&mut self, new_size: UVec2) {
+        if new_size.x > 0 && new_size.y > 0 {
+            self.viewport = UVec2::new(new_size.x, new_size.y);
+            self.surface_config.width = new_size.x;
+            self.surface_config.height = new_size.y;
+            self.surface.configure(&self.device, &self.surface_config);
         } else {
             panic!("Invalid size???");
         }
     }
-}
 
-pub fn upload_images_to_gpu(
-    renderer: Res<Renderer>,
-    mut ui_handler: ResMut<UiHandler>,
-    mut textures: ResMut<Assets<Texture>>,
-) {
-    for (key, image) in ui_handler.texture_atlases_images.data.iter_mut() {
-        if image.dirty {
-            textures.insert(
-                *key,
-                Texture::from_image(&renderer.device, &renderer.queue, image, None),
-            );
-
-            #[cfg(debug_assertions)]
-            println!("image updated");
-            image.dirty = false;
-        }
+    pub fn load_texture(&mut self, bytes: &[u8]) -> ArenaId {
+        let texture = Texture::from_bytes(&self.device, &self.queue, bytes);
+        self.textures.insert(texture)
     }
-}
 
-pub fn render_system(
-    renderer: Res<Renderer>,
-    sprite_pipeline: Res<SpritePipeline>,
-    mesh_pipeline: Res<mesh_pipeline::MeshPipeline>,
-    debug_mesh_pipeline: Res<DebugMeshPipeline>,
-    mut sprite_batch: ResMut<ResourceVec<PreparedRenderItem>>,
-    mut meshes: ResMut<ResourceVec<PreparedMeshItem>>,
-    mut prepared_debug_meshes: ResMut<ResourceVec<PreparedDebugMeshItem>>,
-    mut camera: Query<&mut Camera>,
-    mut time: ResMut<Time>,
-    clear_color: Res<ClearColor>,
-) {
-    let camera = camera.get_single_mut().unwrap();
+    pub(crate) fn get_texture_sampler(&self, sampler_type: TextureSampler) -> &Arc<Sampler> {
+        self.texture_samplers.get(&sampler_type).unwrap()
+    }
 
-    let output = renderer
-        .surface
-        .get_current_texture()
-        .expect("Missing current texture in surface");
+    pub fn render(&mut self, camera: &Camera) {
+        let output = self
+            .surface
+            .get_current_texture()
+            .expect("Missing current texture in surface");
 
-    let view = output
-        .texture
-        .create_view(&wgpu::TextureViewDescriptor::default());
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
-    let mut command_encoder =
-        renderer
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
+        let mut command_encoder =
+            self.device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Render Encoder"),
+                });
+
+        let sprite_batch = prepare_mesh2d_for_batching(self);
+        {
+            let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(self.clear_color.into()),
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
             });
 
-    {
-        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(clear_color.0.into()),
-                    store: true,
-                },
-            })],
-            depth_stencil_attachment: None,
-        });
-        render_sprite_batches(
-            &sprite_batch.values,
-            &mut render_pass,
-            &sprite_pipeline,
-            &camera.bind_groups,
-        );
+            render_2d_batch(
+                &sprite_batch,
+                &mut render_pass,
+                &self.render_pipelines,
+                &camera.bind_groups,
+            );
 
-        render_meshes(
-            &meshes.values,
-            &mut render_pass,
-            &mesh_pipeline,
-            &camera.bind_groups,
-        );
+            // render_mesh_batches(
+            //     &self.render_mesh_batch,
+            //     &mut render_pass,
+            //     &mesh_pipeline,
+            //     &camera.bind_groups,
+            // );
 
-        render_debug_meshes(
-            &prepared_debug_meshes.values,
-            &mut render_pass,
-            &debug_mesh_pipeline,
-            &camera.bind_groups,
-        );
-    }
+            // render_debug_meshes(
+            //     &prepared_debug_meshes.values,
+            //     &mut render_pass,
+            //     &debug_mesh_pipeline,
+            //     &camera.bind_groups,
+            // );
 
-    renderer
-        .queue
-        .submit(std::iter::once(command_encoder.finish()));
-    output.present();
-    sprite_batch.values.clear();
-    meshes.values.clear();
-    prepared_debug_meshes.values.clear();
-    time.update()
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable, Component)]
-pub struct Vertex {
-    pub position: [f32; 3],
-    pub uv: [f32; 2],
-    pub color: [f32; 4],
-}
-
-impl Vertex {
-    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                wgpu::VertexAttribute {
-                    offset: (std::mem::size_of::<[f32; 5]>()) as wgpu::BufferAddress,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-            ],
+            // self.render_batch_ui.clear();
+            // self.render_batch_debug.clear();
         }
-    }
-}
 
-#[derive(Resource, Debug)]
-pub struct PreparedRenderItem {
-    vertex_buffer: Buffer,
-    index_buffer: Buffer,
-    texture_bind_group: BindGroup,
-    indices_len: u32,
-    camera_bind_group_id: CameraBindGroupType,
-}
-
-pub struct RenderBatchMeta<V> {
-    pub(crate) texture_id: uuid::Uuid,
-    pub(crate) vertices: Vec<V>,
-    pub(crate) indices: Vec<u16>,
-}
-
-impl<V> RenderBatchMeta<V> {
-    pub fn new(texture_id: uuid::Uuid, vertices: Vec<V>, indices: Vec<u16>) -> Self {
-        Self {
-            texture_id,
-            vertices,
-            indices,
-        }
-    }
-
-    pub fn update(&mut self, mut vertices: Vec<V>, mut indices: Vec<u16>) {
-        self.vertices.append(&mut vertices);
-        self.indices.append(&mut indices);
+        self.queue.submit(std::iter::once(command_encoder.finish()));
+        output.present();
+        // time.update()
     }
 }

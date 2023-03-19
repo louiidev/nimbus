@@ -1,44 +1,47 @@
 use std::{num::NonZeroU32, sync::Arc};
 
-use wgpu::Sampler;
+use glam::UVec2;
+use guillotiere::euclid::default;
+use image::DynamicImage;
+use wgpu::{Extent3d, Sampler};
 
-use crate::internal_image::Image;
-
-use super::plugin_2d::DefaultImageSampler;
+#[derive(Default, PartialEq, Hash, Eq, Clone, Copy)]
+pub enum TextureSampler {
+    Linear,
+    #[default]
+    Nearest,
+}
 
 pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub dimensions: (u32, u32),
-    pub(crate) sampler: Option<Arc<Sampler>>,
+    pub dimensions: UVec2,
+    pub(crate) sampler: TextureSampler,
 }
 
 impl Texture {
-    pub fn from_bytes(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        bytes: &[u8],
-        label: &str,
-    ) -> Self {
-        let image = Image::from_bytes(bytes);
-        Self::from_image(device, queue, &image, Some(label))
+    pub fn from_bytes(device: &wgpu::Device, queue: &wgpu::Queue, bytes: &[u8]) -> Self {
+        let image = image::load_from_memory(bytes).unwrap();
+
+        Self::from_image(device, queue, &image)
     }
 
-    pub fn from_image(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        image: &Image,
-        label: Option<&str>,
-    ) -> Self {
-        let size = image.texture_descriptor.size;
+    pub fn from_image(device: &wgpu::Device, queue: &wgpu::Queue, image: &DynamicImage) -> Self {
+        let rgba = image.to_rgba8();
+        let size = Extent3d {
+            width: rgba.width(),
+            height: rgba.height(),
+            depth_or_array_layers: 1,
+        };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label,
+            label: None,
             size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
         });
 
         queue.write_texture(
@@ -48,11 +51,11 @@ impl Texture {
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
-            &image.data,
+            &image.as_bytes(),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(4 * image.texture_descriptor.size.width),
-                rows_per_image: NonZeroU32::new(image.texture_descriptor.size.height),
+                bytes_per_row: NonZeroU32::new(4 * size.width),
+                rows_per_image: NonZeroU32::new(size.height),
             },
             size,
         );
@@ -62,11 +65,8 @@ impl Texture {
         Self {
             texture,
             view,
-            dimensions: (
-                image.texture_descriptor.size.width,
-                image.texture_descriptor.size.height,
-            ),
-            sampler: None,
+            dimensions: UVec2::new(size.width, size.height),
+            sampler: TextureSampler::default(),
         }
     }
 }

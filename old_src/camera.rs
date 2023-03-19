@@ -1,10 +1,21 @@
-use std::{collections::HashMap, ops::Range, sync::Arc};
+use std::{ops::Range, sync::Arc};
 
-use glam::{Mat4, UVec2, Vec2, Vec3};
+use bevy_ecs::{
+    prelude::{Bundle, Component, EventReader},
+    system::Query,
+};
+use glam::{Mat4, UVec2, Vec2};
+use hashbrown::HashMap;
 use wgpu::Extent3d;
-use winit::window::Window;
 
-use crate::{areana::ArenaId, components::transform::Transform};
+use crate::{
+    events::{WindowCreated, WindowResized},
+    internal_image::Image,
+    ray::Ray,
+    resources::utils::Assets,
+    transform::{GlobalTransform, Transform},
+    window::Window,
+};
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub enum CameraBindGroupType {
@@ -13,79 +24,89 @@ pub enum CameraBindGroupType {
     Perspective,
 }
 
-#[derive(Debug, Clone)]
-pub struct Camera {
-    pub target: RenderTarget,
-    pub target_info: RenderTargetInfo,
-    pub(crate) bind_groups: HashMap<CameraBindGroupType, Arc<wgpu::BindGroup>>,
-    pub orthographic_projection: OrthographicProjection,
+#[derive(Bundle, Debug)]
+pub struct CameraBundle {
+    pub camera: Camera,
     pub transform: Transform,
+    pub global_transform: GlobalTransform,
 }
 
-impl Camera {
-    pub fn new_with_far(far: f32, physical_size: UVec2, scale: f32) -> Self {
-        // TODO: Make this support any projection and not have a weird hack for UI maybe?
-        let mut projection = OrthographicProjection {
-            far,
-            ..Default::default()
-        };
+impl Default for CameraBundle {
+    fn default() -> Self {
+        Self::new_with_far(1000.0)
+    }
+}
 
-        projection.update(physical_size.x as _, physical_size.y as _);
-
-        Camera {
-            orthographic_projection: projection,
-            transform: Transform::from_xyz(0.0, 0.0, far - 0.1),
-            target_info: RenderTargetInfo {
-                physical_size,
-                scale_factor: scale,
+impl CameraBundle {
+    pub fn new(window: Window) -> Self {
+        Self {
+            camera: Camera {
+                computed: ComputedCameraValues {
+                    target_info: RenderTargetInfo {
+                        physical_size: window.physical_size,
+                        scale_factor: window.scale,
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
             },
             ..Default::default()
         }
     }
-}
 
-impl Default for Camera {
-    fn default() -> Self {
+    /// Create an orthographic projection camera with a custom `Z` position.
+    ///
+    /// The camera is placed at `Z=far-0.1`, looking toward the world origin `(0,0,0)`.
+    /// Its orthographic projection extends from `0.0` to `-far` in camera view space,
+    /// corresponding to `Z=far-0.1` (closest to camera) to `Z=-0.1` (furthest away from
+    /// camera) in world space.
+    pub fn new_with_far(far: f32) -> Self {
+        // we want 0 to be "closest" and +far to be "farthest" in 2d, so we offset
+        // the camera's translation by far and use a right handed coordinate system
+
+        let transform = Transform::from_xyz(0.0, 0.0, far - 0.1);
         Self {
-            target_info: RenderTargetInfo::default(),
-            target: Default::default(),
-            bind_groups: HashMap::default(),
-            orthographic_projection: OrthographicProjection::default(),
-            transform: Transform::from_xyz(0.0, 0.0, 1000. - 0.1),
+            transform,
+            global_transform: Default::default(),
+            camera: Camera::new_with_far(far),
         }
     }
 }
 
-// pub fn camera_system(mut camera: Query<(&mut Camera)>) {
-//     let mut camera = camera.get_single_mut().unwrap();
+pub fn camera_system(
+    mut window_resized_events: EventReader<WindowResized>,
+    mut window_created_events: EventReader<WindowCreated>,
+    mut camera: Query<(&mut Camera)>,
+) {
+    let mut camera = camera.get_single_mut().unwrap();
 
-//     for event in window_created_events.iter() {
-//         camera
-//             .orthographic_projection
-//             .update(event.width, event.height);
+    for event in window_created_events.iter() {
+        camera
+            .orthographic_projection
+            .update(event.width, event.height);
 
-//         camera.computed.target_info = RenderTargetInfo {
-//             physical_size: UVec2 {
-//                 x: event.width as _,
-//                 y: event.height as _,
-//             },
-//             scale_factor: event.scale,
-//         }
-//     }
+        camera.computed.target_info = RenderTargetInfo {
+            physical_size: UVec2 {
+                x: event.width as _,
+                y: event.height as _,
+            },
+            scale_factor: event.scale,
+        }
+    }
 
-//     for event in window_resized_events.iter() {
-//         camera
-//             .orthographic_projection
-//             .update(event.width, event.height);
-//         camera.computed.target_info = RenderTargetInfo {
-//             physical_size: UVec2 {
-//                 x: event.width as _,
-//                 y: event.height as _,
-//             },
-//             scale_factor: camera.computed.target_info.scale_factor,
-//         }
-//     }
-// }
+    for event in window_resized_events.iter() {
+        camera
+            .orthographic_projection
+            .update(event.width, event.height);
+        camera.computed.target_info = RenderTargetInfo {
+            physical_size: UVec2 {
+                x: event.width as _,
+                y: event.height as _,
+            },
+            scale_factor: camera.computed.target_info.scale_factor,
+        }
+    }
+}
 
 /// The "target" that a [`Camera`] will render to. For example, this could be a [`Window`](bevy_window::Window)
 /// swapchain or an [`Image`].
@@ -99,26 +120,26 @@ pub enum RenderTarget {
 }
 
 impl RenderTarget {
-    // pub fn get_render_target_info(
-    //     &self,
-    //     window: &Window,
-    //     images: &Assets<Image>,
-    // ) -> RenderTargetInfo {
-    //     match self {
-    //         RenderTarget::Window => RenderTargetInfo {
-    //             physical_size: UVec2::new(window.physical_size.x, window.physical_size.y),
-    //             scale_factor: window.scale,
-    //         },
-    //         RenderTarget::Image(image_handle) => {
-    //             let image = images.get(image_handle).expect("Error missing image");
-    //             let Extent3d { width, height, .. } = image.texture_descriptor.size;
-    //             RenderTargetInfo {
-    //                 physical_size: UVec2::new(width, height),
-    //                 scale_factor: 1.0,
-    //             }
-    //         }
-    //     }
-    // }
+    pub fn get_render_target_info(
+        &self,
+        window: &Window,
+        images: &Assets<Image>,
+    ) -> RenderTargetInfo {
+        match self {
+            RenderTarget::Window => RenderTargetInfo {
+                physical_size: UVec2::new(window.physical_size.x, window.physical_size.y),
+                scale_factor: window.scale,
+            },
+            RenderTarget::Image(image_handle) => {
+                let image = images.get(image_handle).expect("Error missing image");
+                let Extent3d { width, height, .. } = image.texture_descriptor.size;
+                RenderTargetInfo {
+                    physical_size: UVec2::new(width, height),
+                    scale_factor: 1.0,
+                }
+            }
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -163,7 +184,7 @@ pub enum WindowOrigin {
     TopLeft,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Component, Debug, Clone)]
 pub struct OrthographicProjection {
     pub left: f32,
     pub right: f32,
@@ -283,6 +304,39 @@ pub struct CameraUniform {
     pub view_proj: [[f32; 4]; 4],
 }
 
+#[derive(Component, Debug, Clone)]
+pub struct Camera {
+    pub is_active: bool,
+    pub target: RenderTarget,
+    pub computed: ComputedCameraValues,
+    pub(crate) bind_groups: HashMap<CameraBindGroupType, Arc<wgpu::BindGroup>>,
+    pub orthographic_projection: OrthographicProjection,
+}
+
+impl Camera {
+    pub fn new_with_far(far: f32) -> Self {
+        Camera {
+            orthographic_projection: OrthographicProjection {
+                far,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self {
+            is_active: true,
+            computed: Default::default(),
+            target: Default::default(),
+            bind_groups: HashMap::default(),
+            orthographic_projection: OrthographicProjection::default(),
+        }
+    }
+}
+
 impl Camera {
     #[inline]
     pub fn projection_matrix(&self) -> Mat4 {
@@ -297,7 +351,7 @@ impl Camera {
     /// Converts a physical size in this `Camera` to a logical size.
     #[inline]
     pub fn to_logical(&self, physical_size: UVec2) -> Vec2 {
-        physical_size.as_vec2() / self.target_info.scale_factor
+        physical_size.as_vec2() / self.computed.target_info.scale_factor
     }
 
     /// The rendered physical bounds (minimum, maximum) of the camera. If the `viewport` field is
@@ -326,7 +380,7 @@ impl Camera {
     /// [`RenderTarget`], prefer [`Camera::logical_target_size`].
     #[inline]
     pub fn logical_viewport_size(&self) -> Vec2 {
-        self.to_logical(self.target_info.physical_size)
+        self.to_logical(self.computed.target_info.physical_size)
     }
 
     /// The full logical size of this camera's [`RenderTarget`], ignoring custom `viewport` configuration.
@@ -334,7 +388,7 @@ impl Camera {
     /// For logic that requires the size of the actually rendered area, prefer [`Camera::logical_viewport_size`].
     #[inline]
     pub fn logical_target_size(&self) -> Vec2 {
-        self.to_logical(self.target_info.physical_size)
+        self.to_logical(self.computed.target_info.physical_size)
     }
 
     /// The physical size of this camera's viewport. If the `viewport` field is set to [`Some`], this
@@ -343,7 +397,7 @@ impl Camera {
     /// For logic that requires the full physical size of the [`RenderTarget`], prefer [`Camera::physical_target_size`].
     #[inline]
     pub fn physical_viewport_size(&self) -> UVec2 {
-        self.target_info.physical_size
+        self.computed.target_info.physical_size
     }
 
     /// The full physical size of this camera's [`RenderTarget`], ignoring custom `viewport` configuration.
@@ -351,7 +405,7 @@ impl Camera {
     /// For logic that requires the size of the actually rendered area, prefer [`Camera::physical_viewport_size`].
     #[inline]
     pub fn physical_target_size(&self) -> UVec2 {
-        self.target_info.physical_size
+        self.computed.target_info.physical_size
     }
 
     /// Returns a ray originating from the camera, that passes through everything beyond `viewport_position`.
@@ -364,7 +418,7 @@ impl Camera {
     /// [`ndc_to_world`](Self::ndc_to_world).
     pub fn viewport_to_world(
         &self,
-        camera_transform: &Transform,
+        camera_transform: &GlobalTransform,
         viewport_position: Vec2,
     ) -> Option<Ray> {
         let target_size = self.logical_viewport_size();
@@ -380,9 +434,4 @@ impl Camera {
             direction: (world_far_plane - world_near_plane).normalize(),
         })
     }
-}
-
-pub struct Ray {
-    pub origin: Vec3,
-    pub direction: Vec3,
 }

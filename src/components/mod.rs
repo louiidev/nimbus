@@ -1,8 +1,7 @@
-pub mod animated_sprite;
-pub mod children;
-pub mod collider;
-pub mod parent;
-pub mod shapes;
+pub mod color;
+pub mod rect;
 pub mod sprite;
 pub mod text;
-pub mod timer;
+pub mod texture_atlas;
+pub mod time;
+pub mod transform;
