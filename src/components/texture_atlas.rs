@@ -4,25 +4,22 @@ use crate::areana::ArenaId;
 
 use super::rect::Rect;
 
-#[derive(Clone)]
+#[derive(Clone, Default, Debug)]
 pub struct TextureAtlas {
-    texture_id: ArenaId,
     /// The specific areas of the atlas where each texture can be found
     pub textures: Vec<Rect>,
     pub size: Vec2,
 }
 
 impl TextureAtlas {
-    pub fn new_empty(texture_id: ArenaId, size: Vec2) -> Self {
+    pub fn new_empty(size: Vec2) -> Self {
         Self {
-            texture_id,
             size,
             textures: Vec::new(),
         }
     }
 
-    pub fn from_texture_atlas(
-        texture_id: ArenaId,
+    pub fn new(
         tile_size: Vec2,
         columns: usize,
         rows: usize,
@@ -59,7 +56,6 @@ impl TextureAtlas {
         let grid_size = Vec2::new(columns as f32, rows as f32);
 
         TextureAtlas {
-            texture_id,
             textures,
             size: ((tile_size + current_padding) * grid_size) - current_padding,
         }

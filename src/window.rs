@@ -1,3 +1,4 @@
+#[derive(Default)]
 pub struct WindowDescriptor<'a> {
     pub width: f32,
     pub height: f32,

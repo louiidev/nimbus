@@ -1,7 +1,7 @@
 use glam::Vec2;
-use guacamole::{
+use nimbus::{
     components::{sprite::Sprite, transform::Transform},
-    Engine, Guacamole,
+    Engine, Nimbus,
 };
 
 fn main() {
@@ -15,7 +15,7 @@ pub struct GameExample {
     player: (Sprite, Transform),
 }
 
-impl Guacamole for GameExample {
+impl Nimbus for GameExample {
     fn init(&mut self, engine: &mut Engine) {
         let texture_id = engine
             .renderer

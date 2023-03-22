@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashMap};
 
 use glam::Vec2;
 use wgpu::{
@@ -15,7 +15,10 @@ use crate::{
     },
 };
 
-use super::{pipelines::Pipeline, Renderer};
+use super::{
+    pipelines::{BindGroupLayoutType, Pipeline},
+    Renderer,
+};
 
 pub const QUAD_INDICES: [u16; 6] = [0, 2, 3, 0, 1, 2];
 
@@ -33,14 +36,14 @@ pub const QUAD_UVS: [Vec2; 4] = [
     Vec2::new(0., 0.),
 ];
 
-pub struct Mesh2d<V> {
+pub struct Mesh2d {
     pub(crate) texture_id: ArenaId,
-    pub(crate) vertices: Vec<V>,
+    pub(crate) vertices: Vec<Vertex2D>,
     pub(crate) indices: Vec<u16>,
 }
 
-impl<V> Mesh2d<V> {
-    pub fn new(texture_id: ArenaId, vertices: Vec<V>, indices: Vec<u16>) -> Self {
+impl Mesh2d {
+    pub fn new(texture_id: ArenaId, vertices: Vec<Vertex2D>, indices: Vec<u16>) -> Self {
         Self {
             texture_id,
             vertices,
@@ -48,7 +51,7 @@ impl<V> Mesh2d<V> {
         }
     }
 
-    pub fn update(&mut self, mut vertices: Vec<V>, mut indices: Vec<u16>) {
+    pub fn update(&mut self, mut vertices: Vec<Vertex2D>, mut indices: Vec<u16>) {
         self.vertices.append(&mut vertices);
         self.indices.append(&mut indices);
     }
@@ -56,17 +59,17 @@ impl<V> Mesh2d<V> {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct SpriteVertex {
+pub struct Vertex2D {
     pub position: [f32; 3],
     pub uv: [f32; 2],
     pub color: [f32; 4],
 }
 
-impl SpriteVertex {
+impl Vertex2D {
     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         use std::mem;
         wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<SpriteVertex>() as wgpu::BufferAddress,
+            array_stride: mem::size_of::<Vertex2D>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {
@@ -164,7 +167,7 @@ pub fn setup_mesh2d_pipeline(renderer: &Renderer) -> Pipeline {
     let descriptor = RenderPipelineDescriptor {
         vertex: VertexState {
             entry_point: "vertex",
-            buffers: &[SpriteVertex::desc()],
+            buffers: &[Vertex2D::desc()],
             module: &shader,
         },
         fragment: Some(FragmentState {
@@ -192,9 +195,13 @@ pub fn setup_mesh2d_pipeline(renderer: &Renderer) -> Pipeline {
         multiview: None,
     };
 
+    let bind_group_layouts = HashMap::from([
+        (BindGroupLayoutType::Camera, camera_bind_group_layout),
+        (BindGroupLayoutType::Texture, texture_bind_group_layout),
+    ]);
+
     Pipeline {
         render_pipeline: renderer.device.create_render_pipeline(&descriptor),
-        texture_bind_group_layout,
-        camera_bind_group_layout,
+        bind_group_layouts,
     }
 }
