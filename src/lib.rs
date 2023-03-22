@@ -4,18 +4,19 @@ pub mod components;
 pub mod input;
 pub mod renderer;
 pub mod systems;
+pub mod time;
 pub mod utils;
 pub mod window;
 
+pub use glam as math;
+pub use winit;
+
 use camera::Camera;
-use components::time::Time;
 use glam::UVec2;
 use input::InputManager;
-use renderer::Renderer;
-use systems::{
-    post_render::post_render, prepare_camera_buffers::prepare_camera_buffers,
-    prepare_render::prepare_mesh2d_for_batching,
-};
+use renderer::{ui::Ui, Renderer};
+use systems::prepare_camera_buffers::prepare_camera_buffers;
+use time::Time;
 use window::WindowDescriptor;
 use winit::{
     dpi::LogicalSize,
@@ -24,7 +25,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-pub trait Guacamole {
+pub trait Nimbus {
     fn init(&mut self, engine: &mut Engine) {}
     fn update(&mut self, engine: &mut Engine) {}
 }
@@ -40,20 +41,8 @@ pub struct Engine {
     pub camera: Camera,
     pub window_size: UVec2,
     pub time: Time,
+    pub ui: Ui,
 }
-
-// impl Default for Engine {
-//     fn default() -> Self {
-//         let event_loop = EventLoop::new();
-//         let window = WindowBuilder::new().build(&event_loop).unwrap();
-//         Self {
-//             event_loop: Some(event_loop),
-//             window,
-//             world: World::default(),
-//             renderer: Renderer::default(),
-//         }
-//     }
-// }
 
 impl Engine {
     pub fn new(window_descriptor: WindowDescriptor) -> Self {
@@ -90,23 +79,23 @@ impl Engine {
             camera,
             window_size,
             time: Time::default(),
+            ui: Ui::new(window_size.as_vec2()),
         }
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
-    pub fn run<Game: Guacamole + 'static>(self, game: Game) {
+    pub fn run<Game: Nimbus + 'static>(self, game: Game) {
         pollster::block_on(self.run_async(game));
     }
 
-    pub fn update<Game: Guacamole + 'static>(&mut self, game: &mut Game) {
+    pub fn update<Game: Nimbus + 'static>(&mut self, game: &mut Game) {
         game.update(self);
         prepare_camera_buffers(&self.renderer, &mut self.camera);
-        self.renderer.render(&self.camera);
-        post_render(&mut self.renderer);
+        self.renderer.render(&self.camera, &mut self.ui);
         self.time.update();
     }
 
-    pub async fn run_async<Game: Guacamole + 'static>(mut self, mut game: Game) {
+    pub async fn run_async<Game: Nimbus + 'static>(mut self, mut game: Game) {
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "wasm32")] {
                 std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -151,10 +140,16 @@ impl Engine {
                         let window_size = UVec2::new(physical_size.width, physical_size.height);
                         self.window_size = window_size;
                         self.renderer.resize(window_size);
+                        self.ui.resize(window_size.as_vec2());
                     }
-                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    WindowEvent::ScaleFactorChanged {
+                        new_inner_size,
+                        scale_factor,
+                    } => {
+                        dbg!(scale_factor);
                         let window_size = UVec2::new(new_inner_size.width, new_inner_size.height);
                         self.renderer.resize(window_size);
+                        self.ui.resize(window_size.as_vec2());
                     }
                     WindowEvent::KeyboardInput { ref input, .. } => {
                         self.input.update_keyboard_input(input);

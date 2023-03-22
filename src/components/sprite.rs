@@ -26,7 +26,7 @@ pub struct Sprite {
 impl Default for Sprite {
     fn default() -> Self {
         Self {
-            texture_id: ArenaId::default(),
+            texture_id: ArenaId::first(),
             anchor: Anchor::default(),
             color: Color::WHITE,
             texture_rect: None,

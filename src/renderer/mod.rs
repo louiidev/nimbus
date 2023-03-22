@@ -1,4 +1,4 @@
-mod debug_mesh;
+pub mod debug_mesh;
 pub mod drawing;
 pub mod font;
 pub(crate) mod mesh2d;
@@ -16,14 +16,20 @@ use crate::{
     areana::{Arena, ArenaId},
     camera::Camera,
     components::color::Color,
-    systems::{prepare_render::prepare_mesh2d_for_batching, rendering::render_2d_batch},
+    systems::{
+        prepare_render::{
+            prepare_debug_mesh_for_batching, prepare_mesh2d_for_batching, prepare_ui_for_batching,
+        },
+        rendering::{render_2d_batch, render_debug_meshes},
+    },
 };
 
 use self::{
-    debug_mesh::PreparedDebugMeshItem,
-    mesh2d::{setup_mesh2d_pipeline, Mesh2d, PreparedRenderItem, SpriteVertex},
+    debug_mesh::{setup_debug_mesh_pipeline, DebugMesh},
+    mesh2d::{setup_mesh2d_pipeline, Mesh2d, PreparedRenderItem},
     pipelines::{Pipeline, PipelineType},
     texture::{Texture, TextureSampler},
+    ui::Ui,
 };
 
 pub struct Renderer {
@@ -38,10 +44,9 @@ pub struct Renderer {
 
     pub(crate) render_pipelines: HashMap<PipelineType, Pipeline>,
     pub(crate) texture_samplers: HashMap<TextureSampler, Arc<Sampler>>,
-    pub(crate) render_batch_2d: Vec<(Mesh2d<SpriteVertex>, Vec3)>,
-    pub(crate) render_batch_ui: Vec<PreparedRenderItem>,
+    pub(crate) render_batch_2d: Vec<(Mesh2d, Vec3)>, // storing the transform translation for sorting
     // pub(crate) render_mesh_batch: Vec<PreparedMeshItem>,
-    pub(crate) render_batch_debug: Vec<PreparedDebugMeshItem>,
+    pub(crate) render_batch_debug: Vec<DebugMesh>,
 }
 impl Renderer {
     pub async fn new(window: &Window, viewport: UVec2) -> Self {
@@ -125,7 +130,6 @@ impl Renderer {
             clear_color: Color::OLIVE,
             render_pipelines: HashMap::default(),
             render_batch_2d: Vec::default(),
-            render_batch_ui: Vec::default(),
             // render_mesh_batch: Vec::default(),
             render_batch_debug: Vec::default(),
             texture_samplers: HashMap::from([
@@ -140,6 +144,15 @@ impl Renderer {
             .render_pipelines
             .insert(PipelineType::Mesh2d, setup_mesh2d_pipeline(&renderer));
 
+        renderer.render_pipelines.insert(
+            PipelineType::DebugMesh,
+            setup_debug_mesh_pipeline(&renderer),
+        );
+
+        let id = renderer
+            .textures
+            .insert(Texture::blank(&renderer.device, &renderer.queue));
+        debug_assert!(id == ArenaId::first(), "Arena id out of sync");
         renderer
     }
 
@@ -163,7 +176,7 @@ impl Renderer {
         self.texture_samplers.get(&sampler_type).unwrap()
     }
 
-    pub fn render(&mut self, camera: &Camera) {
+    pub fn render(&mut self, camera: &Camera, ui: &mut Ui) {
         let output = self
             .surface
             .get_current_texture()
@@ -180,6 +193,8 @@ impl Renderer {
                 });
 
         let sprite_batch = prepare_mesh2d_for_batching(self);
+        let debug_mesh_batch = prepare_debug_mesh_for_batching(self);
+        let ui_mesh_batch = prepare_ui_for_batching(ui, self);
         {
             let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -208,19 +223,15 @@ impl Renderer {
             //     &camera.bind_groups,
             // );
 
-            // render_debug_meshes(
-            //     &prepared_debug_meshes.values,
-            //     &mut render_pass,
-            //     &debug_mesh_pipeline,
-            //     &camera.bind_groups,
-            // );
-
-            // self.render_batch_ui.clear();
-            // self.render_batch_debug.clear();
+            render_debug_meshes(
+                &debug_mesh_batch,
+                &mut render_pass,
+                &self.render_pipelines,
+                &camera.bind_groups,
+            );
         }
 
         self.queue.submit(std::iter::once(command_encoder.finish()));
         output.present();
-        // time.update()
     }
 }

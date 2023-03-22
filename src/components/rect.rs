@@ -35,6 +35,11 @@ impl Rect {
         Self::from_corners(Vec2::new(x0, y0), Vec2::new(x1, y1))
     }
 
+    #[inline]
+    pub fn new_top_left(position: Vec2, size: Vec2) -> Self {
+        todo!("Should do that")
+    }
+
     /// Create a new rectangle from two corner points.
     ///
     /// The two points do not need to be the minimum and/or maximum corners.

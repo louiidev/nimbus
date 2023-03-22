@@ -33,6 +33,11 @@ pub fn prepare_camera_buffers(renderer: &Renderer, camera: &mut Camera) {
             contents: bytemuck::cast_slice(&[camera_uniform]),
         });
 
+    let camera_2d_bind_group_layout = &pipeline
+        .bind_group_layouts
+        .get(&crate::renderer::pipelines::BindGroupLayoutType::Camera)
+        .unwrap();
+
     let camera_bind_group = renderer
         .device
         .create_bind_group(&wgpu::BindGroupDescriptor {
@@ -41,7 +46,7 @@ pub fn prepare_camera_buffers(renderer: &Renderer, camera: &mut Camera) {
                 resource: camera_buffer.as_entire_binding(),
             }],
             label: Some("3d camera bind group"),
-            layout: &pipeline.camera_bind_group_layout,
+            layout: &camera_2d_bind_group_layout,
         });
 
     camera.bind_groups.insert(
@@ -81,7 +86,7 @@ pub fn prepare_camera_buffers(renderer: &Renderer, camera: &mut Camera) {
                 resource: camera_buffer.as_entire_binding(),
             }],
             label: Some("3d camera bind group"),
-            layout: &pipeline.camera_bind_group_layout,
+            layout: &camera_2d_bind_group_layout,
         });
 
     camera.bind_groups.insert(
@@ -89,42 +94,47 @@ pub fn prepare_camera_buffers(renderer: &Renderer, camera: &mut Camera) {
         Arc::new(camera_bind_group),
     );
 
-    //3D
-    // let pipeline = renderer
-    //     .render_pipelines
-    //     .get(&PipelineType::Mesh3d)
-    //     .unwrap();
+    //3D Debug
+    let pipeline = renderer
+        .render_pipelines
+        .get(&PipelineType::DebugMesh)
+        .unwrap();
 
-    // let projection = camera.projection_matrix();
+    let projection = camera.projection_matrix();
 
-    // let view = camera.transform.compute_matrix();
-    // let inverse_view = view.inverse();
-    // let view_projection = projection * inverse_view;
+    let view = camera.transform.compute_matrix();
+    let inverse_view = view.inverse();
+    let view_projection = projection * inverse_view;
 
-    // let camera_uniform = CameraUniform {
-    //     view_proj: view_projection.to_cols_array_2d(),
-    // };
-    // let camera_buffer = renderer
-    //     .device
-    //     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-    //         label: Some("View Buffer"),
-    //         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-    //         contents: bytemuck::cast_slice(&[camera_uniform]),
-    //     });
+    let camera_uniform = CameraUniform {
+        view_proj: view_projection.to_cols_array_2d(),
+    };
+    let camera_buffer = renderer
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("View Buffer"),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+            contents: bytemuck::cast_slice(&[camera_uniform]),
+        });
 
-    // let camera_bind_group = renderer
-    //     .device
-    //     .create_bind_group(&wgpu::BindGroupDescriptor {
-    //         entries: &[wgpu::BindGroupEntry {
-    //             binding: 0,
-    //             resource: camera_buffer.as_entire_binding(),
-    //         }],
-    //         label: Some("3d camera bind group"),
-    //         layout: &pipeline.camera_bind_group_layout,
-    //     });
+    let camera_bind_group = renderer
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+            label: Some("3d camera bind group"),
+            layout: &pipeline
+                .bind_group_layouts
+                .get(&crate::renderer::pipelines::BindGroupLayoutType::Camera)
+                .unwrap(),
+        });
 
-    // camera.bind_groups.insert(
-    //     CameraBindGroupType::Perspective,
-    //     Arc::new(camera_bind_group),
-    // );
+    camera.bind_groups.insert(
+        CameraBindGroupType::Perspective,
+        Arc::new(camera_bind_group),
+    );
+
+    //3D Debug Mesh
 }

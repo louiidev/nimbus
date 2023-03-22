@@ -1,21 +1,22 @@
-# 🥑 guacamole 🥑
+# ☁️ nimbus ☁️
 A small toy game engine built in rust, built to learn game engine &amp; graphics programming.
 
 
 
 ## About
-
 * Why another engine? I've always wanted to build a game engine and learn about how they work
 * Who should use it? probably just me
-* What's with the name? Github auto generated a suggested name that contained guacamole and I thought it sounded neat
+* What's with the name? Hey, naming things is hard, I got this name from dragon ball and the flying nimbus!
 * Heavily inspired by bevy and constantly used a reference when building features
 
 
 ## Goals
-* 2D & 3D engine
+* 2D engine
 * built in editor for managing/viewing entities on screen
+* Fast & ergonomic, I want it to feel fun to use and to feel frictionless 
+* Potentially 3D support, stretch goals
+
 
 ### Foundations
-* winit
-* wgpu
-* bevy_ecs
+* winit - For windowing, mouse & keyboard input
+* wgpu - For rendering backend, allowing the engine to support Vulkan, DX12 & Metal

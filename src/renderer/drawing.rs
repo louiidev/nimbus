@@ -1,7 +1,10 @@
-use crate::components::{sprite::Sprite, transform::Transform};
+use glam::Vec2;
+
+use crate::components::{color::Color, rect::Rect, sprite::Sprite, transform::Transform};
 
 use super::{
-    mesh2d::{Mesh2d, SpriteVertex, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
+    debug_mesh::DebugMesh,
+    mesh2d::{Mesh2d, Vertex2D, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS},
     Renderer,
 };
 
@@ -44,7 +47,7 @@ impl Renderer {
         });
 
         for i in 0..QUAD_VERTEX_POSITIONS.len() {
-            vertices.push(SpriteVertex {
+            vertices.push(Vertex2D {
                 position: positions[i],
                 uv: uvs[i].into(),
                 color: sprite.color.into(),
@@ -54,5 +57,13 @@ impl Renderer {
         let mesh = Mesh2d::new(sprite.texture_id, vertices, QUAD_INDICES.to_vec());
 
         self.render_batch_2d.push((mesh, transform.translation));
+    }
+
+    pub fn draw_debug_rect(&mut self, rect: &Rect, color: Color) {
+        self.render_batch_debug.push(DebugMesh::rect(rect, color));
+    }
+
+    pub fn draw_debug_line(&mut self, p1: Vec2, p2: Vec2, color: Color) {
+        self.render_batch_debug.push(DebugMesh::line(p1, p2, color));
     }
 }
