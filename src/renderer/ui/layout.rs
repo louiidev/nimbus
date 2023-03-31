@@ -1,7 +1,5 @@
-use glam::Vec2;
-use guillotiere::euclid::default;
-
 use crate::{components::color::Color, renderer::mesh2d::Mesh2d};
+use glam::Vec2;
 
 #[derive(Debug)]
 pub struct LayoutTheme {

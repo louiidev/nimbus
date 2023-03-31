@@ -6,7 +6,7 @@ use wgpu::{
     PrimitiveState, PrimitiveTopology, RenderPipelineDescriptor, VertexState,
 };
 
-use crate::{arena::ArenaId, camera::CameraBindGroupType, components::color::Color};
+use crate::{arena::ArenaId, components::color::Color};
 
 use super::{
     pipelines::{BindGroupLayoutType, Pipeline},
@@ -116,7 +116,6 @@ pub struct PreparedRenderItem {
     pub(crate) index_buffer: Buffer,
     pub(crate) texture_bind_group: BindGroup,
     pub(crate) indices_len: u32,
-    pub(crate) camera_bind_group_id: CameraBindGroupType,
 }
 
 pub fn setup_mesh2d_pipeline(renderer: &Renderer) -> Pipeline {

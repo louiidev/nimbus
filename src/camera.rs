@@ -130,13 +130,6 @@ pub struct RenderTargetInfo {
     pub scale_factor: f32,
 }
 
-#[derive(Default, Debug, Clone)]
-pub struct ComputedCameraValues {
-    target_info: RenderTargetInfo,
-    // position and size of the `Viewport`
-    old_viewport_size: Option<UVec2>,
-}
-
 #[derive(Debug, Clone)]
 pub enum ScalingMode {
     /// Manually specify left/right/top/bottom values.
@@ -254,10 +247,6 @@ impl OrthographicProjection {
                 self.bottom = viewport_height;
             }
         }
-    }
-
-    fn far(&self) -> f32 {
-        self.far
     }
 }
 

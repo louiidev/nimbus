@@ -5,7 +5,6 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     arena::ArenaId,
-    camera::CameraBindGroupType,
     renderer::{
         debug_mesh::PreparedDebugMeshItem,
         mesh2d::{Mesh2d, PreparedRenderItem},
@@ -103,7 +102,6 @@ pub fn prepare_mesh2d_for_batching(renderer: &mut Renderer) -> Vec<PreparedRende
                 index_buffer,
                 texture_bind_group,
                 indices_len: batch.indices.len() as _,
-                camera_bind_group_id: CameraBindGroupType::Orthographic,
             }
         })
         .collect()
@@ -191,7 +189,6 @@ pub fn prepare_ui_for_batching(ui: &mut Ui, renderer: &mut Renderer) -> Vec<Prep
                 index_buffer,
                 texture_bind_group,
                 indices_len: batch.indices.len() as _,
-                camera_bind_group_id: CameraBindGroupType::Orthographic,
             }
         })
         .collect()

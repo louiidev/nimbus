@@ -1,8 +1,8 @@
-use glam::Vec2;
 use crate::{
     arena::ArenaId,
     components::{color::Color, rect::Rect, sprite::Sprite, text::Text, transform::Transform},
 };
+use glam::Vec2;
 
 use super::{
     debug_mesh::DebugMesh,
@@ -34,12 +34,12 @@ impl Renderer {
         self.meshes2d.push((mesh, rect.center().extend(0.)));
     }
 
-    pub fn draw_text(&mut self, text: &Text, position: Vec2) {
+    pub fn draw_text(&mut self, text: &Text, _position: Vec2) {
         // let mesh = Mesh2d::new(sprite.texture_id, vertices, QUAD_INDICES.to_vec());
         // self.meshes2d.push((mesh, position.extend(0f32)));
 
-        let data = self.font_renderer.queue_text(
-            &text,
+        let _data = self.font_renderer.queue_text(
+            text,
             self.viewport.as_vec2(),
             fontdue::layout::CoordinateSystem::PositiveYUp,
             &mut self.textures,

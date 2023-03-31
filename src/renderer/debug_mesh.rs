@@ -9,7 +9,6 @@ use wgpu::{
 use crate::components::{color::Color, rect::Rect};
 
 use super::{
-    mesh2d::QUAD_INDICES,
     pipelines::{BindGroupLayoutType, Pipeline},
     Renderer,
 };
@@ -45,7 +44,6 @@ impl DebugMeshVertex {
 
 pub struct DebugMesh {
     pub(crate) vertices: Vec<DebugMeshVertex>,
-    pub(crate) indices: Vec<u16>,
 }
 
 impl DebugMesh {
@@ -75,10 +73,7 @@ impl DebugMesh {
             },
         ];
 
-        DebugMesh {
-            vertices,
-            indices: QUAD_INDICES.to_vec(),
-        }
+        DebugMesh { vertices }
     }
 
     pub fn line(p1: Vec2, p2: Vec2, color: Color) -> Self {
@@ -94,10 +89,7 @@ impl DebugMesh {
             },
         ];
 
-        DebugMesh {
-            vertices,
-            indices: QUAD_INDICES.to_vec(),
-        }
+        DebugMesh { vertices }
     }
 }
 

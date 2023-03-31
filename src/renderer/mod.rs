@@ -58,7 +58,6 @@ pub struct Renderer {
     // Before rendering, we prep these meshes for render batching and drawing
     // mesh used for sprite and text drawing or anything 2d
     pub(crate) meshes2d: Vec<(Mesh2d, Vec3)>, // storing the transform translation for sorting
-    pub(crate) ui_meshes: Vec<Mesh2d>,
     // pub(crate) render_mesh_batch: Vec<PreparedMeshItem>,
     // Used for drawing lines and debug shapes
     // TODO: remove from release build
@@ -150,7 +149,6 @@ impl Renderer {
             clear_color: Color::hex("#6b6ab3").unwrap(),
             render_pipelines: HashMap::default(),
             meshes2d: Vec::default(),
-            ui_meshes: Vec::default(),
             // render_mesh_batch: Vec::default(),
             debug_meshes: Vec::default(),
             texture_samplers: HashMap::from([
@@ -236,21 +234,6 @@ impl Renderer {
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("Render Encoder"),
                 });
-
-        // // TODO: think of a way to only have a single font cache
-        // Renderer::move_temp_image_batches_from_font_renderer(
-        //     &mut self.textures,
-        //     &mut self.font_renderer,
-        //     &self.device,
-        //     &self.queue,
-        // );
-
-        // Renderer::move_temp_image_batches_from_font_renderer(
-        //     &mut self.textures,
-        //     &mut ui.font_renderer,
-        //     &self.device,
-        //     &self.queue,
-        // );
 
         let sprite_batch = prepare_mesh2d_for_batching(self);
         let debug_mesh_batch = prepare_debug_mesh_for_batching(self);

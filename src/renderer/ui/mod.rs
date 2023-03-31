@@ -5,8 +5,8 @@ use crate::components::{color::Color, text::Text, transform::Transform};
 use self::layout::{Layout, LayoutDirection, LayoutTheme};
 
 use super::{
-    font_renderer::{self, FontRenderer},
-    mesh2d::{self, Mesh2d, Vertex2D, QUAD_INDICES, QUAD_VERTEX_POSITIONS},
+    font_renderer::FontRenderer,
+    mesh2d::{Mesh2d, Vertex2D, QUAD_INDICES, QUAD_VERTEX_POSITIONS},
     Renderer,
 };
 
@@ -203,7 +203,7 @@ impl Ui {
         size
     }
 
-    fn push_widget(&mut self, size: Vec2, mesh: Mesh2d) {}
+    // fn push_widget(&mut self, size: Vec2, mesh: Mesh2d) {}
 
     fn push_layout(&mut self, layout: Layout) {
         self.allocate_space(layout.size);

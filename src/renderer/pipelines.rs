@@ -10,7 +10,7 @@ pub struct Pipeline {
 #[derive(PartialEq, Eq, Hash)]
 pub enum PipelineType {
     Mesh2d,
-    Mesh3d,
+    _Mesh3d,
     DebugMesh,
 }
 
