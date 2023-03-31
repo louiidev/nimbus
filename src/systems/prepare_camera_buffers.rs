@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     camera::{Camera, CameraBindGroupType, CameraUniform},
-    components::{sprite::Sprite, transform::Transform},
+    components::transform::Transform,
     renderer::{pipelines::PipelineType, Renderer},
 };
 
@@ -46,7 +46,7 @@ pub fn prepare_camera_buffers(renderer: &Renderer, camera: &mut Camera) {
                 resource: camera_buffer.as_entire_binding(),
             }],
             label: Some("3d camera bind group"),
-            layout: &camera_2d_bind_group_layout,
+            layout: camera_2d_bind_group_layout,
         });
 
     camera.bind_groups.insert(
@@ -86,7 +86,7 @@ pub fn prepare_camera_buffers(renderer: &Renderer, camera: &mut Camera) {
                 resource: camera_buffer.as_entire_binding(),
             }],
             label: Some("3d camera bind group"),
-            layout: &camera_2d_bind_group_layout,
+            layout: camera_2d_bind_group_layout,
         });
 
     camera.bind_groups.insert(
@@ -125,7 +125,7 @@ pub fn prepare_camera_buffers(renderer: &Renderer, camera: &mut Camera) {
                 resource: camera_buffer.as_entire_binding(),
             }],
             label: Some("3d camera bind group"),
-            layout: &pipeline
+            layout: pipeline
                 .bind_group_layouts
                 .get(&crate::renderer::pipelines::BindGroupLayoutType::Camera)
                 .unwrap(),

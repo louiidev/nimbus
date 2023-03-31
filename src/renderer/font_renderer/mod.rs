@@ -17,7 +17,7 @@ use self::{
 };
 use crate::{
     arena::{Arena, ArenaId},
-    components::{dynamic_texture_atlas_builder::TempImageData, rect::Rect, text::Text},
+    components::{dynamic_texture_atlas_builder::TempImageData, text::Text},
     utils::float_ord::FloatOrd,
 };
 

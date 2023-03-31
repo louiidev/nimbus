@@ -3,7 +3,7 @@ use nimbus::{window::WindowDescriptor, Engine, Nimbus};
 pub struct UiExample {}
 
 impl Nimbus for UiExample {
-    fn init(&mut self, engine: &mut nimbus::Engine) {}
+    fn init(&mut self, _engine: &mut nimbus::Engine) {}
 
     fn update(&mut self, engine: &mut nimbus::Engine, _delta: f32) {
         engine.ui.left_panel(200., |ui| {
@@ -14,7 +14,7 @@ impl Nimbus for UiExample {
         });
     }
 
-    fn render(&mut self, renderer: &mut nimbus::renderer::Renderer, delta: f32) {}
+    fn render(&mut self, _renderer: &mut nimbus::renderer::Renderer, _delta: f32) {}
 }
 
 fn main() {

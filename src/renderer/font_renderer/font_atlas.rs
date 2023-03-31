@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 
-use fontdue::layout::{CoordinateSystem, Layout, LayoutSettings, TextStyle};
 use fontdue::Metrics;
 use glam::Vec2;
 
-use wgpu::{Extent3d, TextureDimension, TextureFormat};
+use wgpu::TextureFormat;
 
-use crate::arena::{Arena, ArenaId};
 use crate::components::dynamic_texture_atlas_builder::{DynamicTextureAtlasBuilder, TempImageData};
 
 pub(crate) struct FontAtlas {

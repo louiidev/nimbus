@@ -1,4 +1,4 @@
-use glam::{IVec2, Vec2};
+use glam::Vec2;
 
 use super::rect::Rect;
 

@@ -1,6 +1,5 @@
 use super::{rect::Rect, texture_atlas::TextureAtlas};
-use crate::arena::ArenaId;
-use glam::{IVec2, UVec2, Vec2};
+use glam::{IVec2, Vec2};
 use guillotiere::{size2, Allocation, AtlasAllocator};
 use wgpu::TextureFormat;
 

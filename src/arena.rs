@@ -1074,7 +1074,7 @@ impl<T> From<Vec<T>> for Arena<T> {
         for i in 0..values.len() {
             slots.push(Slot {
                 value_slot: i,
-                state: State::Used { uid: uid, value: i },
+                state: State::Used { uid, value: i },
             });
             uid += 1;
         }

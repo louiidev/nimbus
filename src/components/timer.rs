@@ -42,7 +42,7 @@ impl Timer {
                 self.times_finished_this_tick =
                     (self.elapsed.as_nanos() / self.duration.as_nanos()) as u32;
                 // Duration does not have a modulo
-                self.elapsed = self.elapsed - self.duration * self.times_finished_this_tick;
+                self.elapsed -= self.duration * self.times_finished_this_tick;
             } else {
                 self.times_finished_this_tick = 1;
                 self.elapsed = self.duration;

@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use glam::UVec2;
 use image::DynamicImage;
-use wgpu::{Extent3d, Sampler};
+use wgpu::Extent3d;
 
 #[derive(Default, PartialEq, Hash, Eq, Clone, Copy)]
 pub enum TextureSampler {
