@@ -1,54 +1,74 @@
 pub mod debug_mesh;
 pub mod drawing;
-pub mod font;
-pub(crate) mod mesh2d;
+pub mod font_renderer;
+pub mod mesh2d;
 pub(crate) mod pipelines;
 pub mod texture;
 pub mod ui;
 
 use std::{collections::HashMap, sync::Arc};
 
-use glam::{UVec2, Vec3};
-use wgpu::{CommandEncoder, RenderPass, Sampler, SurfaceConfiguration, TextureSampleType};
+use glam::{UVec2, Vec2, Vec3};
+use wgpu::{Sampler, SurfaceConfiguration};
 use winit::window::Window;
 
 use crate::{
-    areana::{Arena, ArenaId},
+    arena::{Arena, ArenaId},
     camera::Camera,
     components::color::Color,
     systems::{
         prepare_render::{
             prepare_debug_mesh_for_batching, prepare_mesh2d_for_batching, prepare_ui_for_batching,
         },
-        rendering::{render_2d_batch, render_debug_meshes},
+        rendering::{render_2d_batch, render_debug_meshes, render_ui_batch},
     },
 };
 
 use self::{
     debug_mesh::{setup_debug_mesh_pipeline, DebugMesh},
-    mesh2d::{setup_mesh2d_pipeline, Mesh2d, PreparedRenderItem},
+    font_renderer::FontRenderer,
+    mesh2d::{setup_mesh2d_pipeline, Mesh2d},
     pipelines::{Pipeline, PipelineType},
     texture::{Texture, TextureSampler},
     ui::Ui,
 };
 
 pub struct Renderer {
+    // The GPU textures
     pub(crate) textures: Arena<Texture>,
+
+    pub(crate) font_renderer: FontRenderer,
+
+    // WGPU
     pub(crate) device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface,
     surface_config: SurfaceConfiguration,
+    pub(crate) texture_samplers: HashMap<TextureSampler, Arc<Sampler>>,
+
     pub clear_color: Color,
 
     pub(crate) viewport: UVec2,
 
+    // Render pipelines for each drawing type.
+    // TODO: needs to support custom pipelines
     pub(crate) render_pipelines: HashMap<PipelineType, Pipeline>,
-    pub(crate) texture_samplers: HashMap<TextureSampler, Arc<Sampler>>,
-    pub(crate) render_batch_2d: Vec<(Mesh2d, Vec3)>, // storing the transform translation for sorting
+    // The batches, populated by the engine caller
+
+    // Before rendering, we prep these meshes for render batching and drawing
+    // mesh used for sprite and text drawing or anything 2d
+    pub(crate) meshes2d: Vec<(Mesh2d, Vec3)>, // storing the transform translation for sorting
+    pub(crate) ui_meshes: Vec<Mesh2d>,
     // pub(crate) render_mesh_batch: Vec<PreparedMeshItem>,
-    pub(crate) render_batch_debug: Vec<DebugMesh>,
+    // Used for drawing lines and debug shapes
+    // TODO: remove from release build
+    pub(crate) debug_meshes: Vec<DebugMesh>,
 }
 impl Renderer {
+    pub fn get_viewport(&self) -> Vec2 {
+        self.viewport.as_vec2()
+    }
+
     pub async fn new(window: &Window, viewport: UVec2) -> Self {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -127,17 +147,19 @@ impl Renderer {
             surface,
             device,
             queue,
-            clear_color: Color::OLIVE,
+            clear_color: Color::hex("#6b6ab3").unwrap(),
             render_pipelines: HashMap::default(),
-            render_batch_2d: Vec::default(),
+            meshes2d: Vec::default(),
+            ui_meshes: Vec::default(),
             // render_mesh_batch: Vec::default(),
-            render_batch_debug: Vec::default(),
+            debug_meshes: Vec::default(),
             texture_samplers: HashMap::from([
                 (TextureSampler::Linear, Arc::new(default_sampler_linear)),
                 (TextureSampler::Nearest, Arc::new(default_sampler_nearest)),
             ]),
             viewport,
             surface_config,
+            font_renderer: FontRenderer::new(),
         };
 
         renderer
@@ -172,9 +194,32 @@ impl Renderer {
         self.textures.insert(texture)
     }
 
+    pub fn load_font(&mut self, bytes: &[u8]) -> ArenaId {
+        let id = self.font_renderer.load_font(bytes).unwrap();
+
+        id
+    }
+
     pub(crate) fn get_texture_sampler(&self, sampler_type: TextureSampler) -> &Arc<Sampler> {
         self.texture_samplers.get(&sampler_type).unwrap()
     }
+
+    // pub fn move_temp_image_batches_from_font_renderer(
+    //     textures: &mut Arena<Texture>,
+    //     font_renderer: &mut FontRenderer,
+    //     device: &Device,
+    //     queue: &Queue,
+    // ) {
+    //     let temp_images: HashMap<(FloatOrd, ArenaId), TempImageData> =
+    //         font_renderer.images_to_upload.drain().collect();
+
+    //     for (key, image) in temp_images {
+    //         if let Some(key) = font_renderer.texture_mapping.get(&key).copied() {
+    //             let texture = Texture::from_bytes(&device, &queue, &image.data);
+    //             *textures.get_mut(key).unwrap() = texture;
+    //         }
+    //     }
+    // }
 
     pub fn render(&mut self, camera: &Camera, ui: &mut Ui) {
         let output = self
@@ -191,6 +236,21 @@ impl Renderer {
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("Render Encoder"),
                 });
+
+        // // TODO: think of a way to only have a single font cache
+        // Renderer::move_temp_image_batches_from_font_renderer(
+        //     &mut self.textures,
+        //     &mut self.font_renderer,
+        //     &self.device,
+        //     &self.queue,
+        // );
+
+        // Renderer::move_temp_image_batches_from_font_renderer(
+        //     &mut self.textures,
+        //     &mut ui.font_renderer,
+        //     &self.device,
+        //     &self.queue,
+        // );
 
         let sprite_batch = prepare_mesh2d_for_batching(self);
         let debug_mesh_batch = prepare_debug_mesh_for_batching(self);
@@ -225,6 +285,13 @@ impl Renderer {
 
             render_debug_meshes(
                 &debug_mesh_batch,
+                &mut render_pass,
+                &self.render_pipelines,
+                &camera.bind_groups,
+            );
+
+            render_ui_batch(
+                &ui_mesh_batch,
                 &mut render_pass,
                 &self.render_pipelines,
                 &camera.bind_groups,

@@ -1,6 +1,6 @@
 use fontdue::layout::{HorizontalAlign, VerticalAlign};
 
-use crate::areana::ArenaId;
+use crate::arena::ArenaId;
 
 use super::color::Color;
 

@@ -1,5 +1,6 @@
 pub mod animated_sprite;
 pub mod color;
+pub mod dynamic_texture_atlas_builder;
 pub mod ray;
 pub mod rect;
 pub mod sprite;

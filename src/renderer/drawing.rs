@@ -1,6 +1,8 @@
 use glam::Vec2;
-
-use crate::components::{color::Color, rect::Rect, sprite::Sprite, transform::Transform};
+use crate::{
+    arena::ArenaId,
+    components::{color::Color, rect::Rect, sprite::Sprite, text::Text, transform::Transform},
+};
 
 use super::{
     debug_mesh::DebugMesh,
@@ -9,6 +11,45 @@ use super::{
 };
 
 impl Renderer {
+    pub fn draw_geometry(&mut self, vertices: Vec<Vertex2D>, indices: Vec<u16>, position: Vec2) {
+        let vertices: Vec<Vertex2D> = vertices
+            .iter()
+            .map(|vertex| Vertex2D {
+                position: (Vec2::new(vertex.position[0], vertex.position[1]) + position)
+                    .extend(0.)
+                    .into(),
+                uv: vertex.uv,
+                color: vertex.color,
+            })
+            .collect();
+
+        let mesh = Mesh2d::new(ArenaId::first(), vertices, indices);
+
+        self.meshes2d.push((mesh, position.extend(0.)));
+    }
+
+    pub fn draw_rect(&mut self, rect: &Rect, color: Color) {
+        let mesh = Mesh2d::rect(rect.center(), rect.size(), color);
+
+        self.meshes2d.push((mesh, rect.center().extend(0.)));
+    }
+
+    pub fn draw_text(&mut self, text: &Text, position: Vec2) {
+        // let mesh = Mesh2d::new(sprite.texture_id, vertices, QUAD_INDICES.to_vec());
+        // self.meshes2d.push((mesh, position.extend(0f32)));
+
+        let data = self.font_renderer.queue_text(
+            &text,
+            self.viewport.as_vec2(),
+            fontdue::layout::CoordinateSystem::PositiveYUp,
+            &mut self.textures,
+            &self.device,
+            &self.queue,
+        );
+
+        todo!("Render some fonts")
+    }
+
     pub fn draw_sprite(&mut self, sprite: &Sprite, transform: &Transform) {
         let mut uvs = QUAD_UVS;
         if sprite.flip_x {
@@ -56,14 +97,14 @@ impl Renderer {
 
         let mesh = Mesh2d::new(sprite.texture_id, vertices, QUAD_INDICES.to_vec());
 
-        self.render_batch_2d.push((mesh, transform.translation));
+        self.meshes2d.push((mesh, transform.translation));
     }
 
     pub fn draw_debug_rect(&mut self, rect: &Rect, color: Color) {
-        self.render_batch_debug.push(DebugMesh::rect(rect, color));
+        self.debug_meshes.push(DebugMesh::rect(rect, color));
     }
 
     pub fn draw_debug_line(&mut self, p1: Vec2, p2: Vec2, color: Color) {
-        self.render_batch_debug.push(DebugMesh::line(p1, p2, color));
+        self.debug_meshes.push(DebugMesh::line(p1, p2, color));
     }
 }

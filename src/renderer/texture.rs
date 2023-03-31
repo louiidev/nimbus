@@ -1,7 +1,6 @@
-use std::{num::NonZeroU32, sync::Arc};
+use std::num::NonZeroU32;
 
 use glam::UVec2;
-use guillotiere::euclid::default;
 use image::DynamicImage;
 use wgpu::{Extent3d, Sampler};
 
@@ -64,13 +63,18 @@ impl Texture {
         Self::from_image(device, queue, &image)
     }
 
-    pub fn from_image(device: &wgpu::Device, queue: &wgpu::Queue, image: &DynamicImage) -> Self {
-        let rgba = image.to_rgba8();
+    pub fn from_detailed_bytes(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bytes: &[u8],
+        size: UVec2,
+    ) -> Self {
         let size = Extent3d {
-            width: rgba.width(),
-            height: rgba.height(),
+            width: size.x,
+            height: size.y,
             depth_or_array_layers: 1,
         };
+
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size,
@@ -89,7 +93,7 @@ impl Texture {
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
-            &image.as_bytes(),
+            bytes,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: NonZeroU32::new(4 * size.width),
@@ -106,5 +110,15 @@ impl Texture {
             dimensions: UVec2::new(size.width, size.height),
             sampler: TextureSampler::default(),
         }
+    }
+
+    pub fn from_image(device: &wgpu::Device, queue: &wgpu::Queue, image: &DynamicImage) -> Self {
+        let rgba = image.to_rgba8();
+        let size = UVec2 {
+            x: rgba.width(),
+            y: rgba.height(),
+        };
+
+        Texture::from_detailed_bytes(device, queue, image.as_bytes(), size)
     }
 }

@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashMap};
+use std::collections::HashMap;
 
 use glam::Vec2;
 use wgpu::{
@@ -6,14 +6,7 @@ use wgpu::{
     PrimitiveState, PrimitiveTopology, RenderPipelineDescriptor, VertexState,
 };
 
-use crate::{
-    areana::ArenaId,
-    camera::CameraBindGroupType,
-    components::{
-        sprite::Sprite,
-        transform::{GlobalTransform, Transform},
-    },
-};
+use crate::{arena::ArenaId, camera::CameraBindGroupType, components::color::Color};
 
 use super::{
     pipelines::{BindGroupLayoutType, Pipeline},
@@ -36,6 +29,7 @@ pub const QUAD_UVS: [Vec2; 4] = [
     Vec2::new(0., 0.),
 ];
 
+#[derive(Debug)]
 pub struct Mesh2d {
     pub(crate) texture_id: ArenaId,
     pub(crate) vertices: Vec<Vertex2D>,
@@ -54,6 +48,30 @@ impl Mesh2d {
     pub fn update(&mut self, mut vertices: Vec<Vertex2D>, mut indices: Vec<u16>) {
         self.vertices.append(&mut vertices);
         self.indices.append(&mut indices);
+    }
+
+    pub fn rect(position: Vec2, size: Vec2, color: Color) -> Self {
+        let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
+            (position + ((quad_pos - Vec2::new(-0.5, -0.5)) * size))
+                .extend(0.)
+                .into()
+        });
+
+        let vertices: Vec<Vertex2D> = positions
+            .iter()
+            .enumerate()
+            .map(|(index, vertex_position)| Vertex2D {
+                position: *vertex_position,
+                uv: QUAD_UVS[index].into(),
+                color: color.into(),
+            })
+            .collect();
+
+        Self {
+            texture_id: ArenaId::first(),
+            vertices,
+            indices: QUAD_INDICES.to_vec(),
+        }
     }
 }
 

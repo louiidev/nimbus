@@ -1,6 +1,6 @@
 use glam::Vec2;
 
-use crate::areana::ArenaId;
+use crate::arena::ArenaId;
 
 use super::{color::Color, rect::Rect, transform::Transform};
 

@@ -1,7 +1,5 @@
 use glam::{IVec2, Vec2};
 
-use crate::areana::ArenaId;
-
 use super::rect::Rect;
 
 #[derive(Clone, Default, Debug)]
@@ -61,19 +59,8 @@ impl TextureAtlas {
         }
     }
 
-    fn add_texture(&mut self, rect: Rect) -> usize {
+    pub(crate) fn add_texture(&mut self, rect: Rect) -> usize {
         self.textures.push(rect);
         self.textures.len() - 1
     }
-}
-
-fn to_rect(rectangle: guillotiere::Rectangle) -> Rect {
-    Rect {
-        min: IVec2::new(rectangle.min.x, rectangle.min.y).as_vec2(),
-        max: IVec2::new(rectangle.max.x, rectangle.max.y).as_vec2(),
-    }
-}
-
-fn to_size2(vec2: Vec2) -> guillotiere::Size {
-    guillotiere::Size::new(vec2.x as i32, vec2.y as i32)
 }

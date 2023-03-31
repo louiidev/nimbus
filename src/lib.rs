@@ -1,4 +1,4 @@
-pub mod areana;
+pub mod arena;
 pub mod camera;
 pub mod components;
 pub mod input;
@@ -9,6 +9,7 @@ pub mod utils;
 pub mod window;
 
 pub use glam as math;
+use math::Vec2;
 pub use winit;
 
 use camera::Camera;
@@ -26,8 +27,9 @@ use winit::{
 };
 
 pub trait Nimbus {
-    fn init(&mut self, engine: &mut Engine) {}
-    fn update(&mut self, engine: &mut Engine) {}
+    fn init(&mut self, _engine: &mut Engine) {}
+    fn update(&mut self, engine: &mut Engine, delta: f32);
+    fn render(&mut self, renderer: &mut Renderer, delta: f32);
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -36,11 +38,11 @@ use wasm_bindgen::prelude::*;
 pub struct Engine {
     window: Window,
     event_loop: Option<EventLoop<()>>,
-    pub renderer: Renderer,
+    pub(crate) renderer: Option<Renderer>,
     pub input: InputManager,
     pub camera: Camera,
     pub window_size: UVec2,
-    pub time: Time,
+    pub(crate) time: Time,
     pub ui: Ui,
 }
 
@@ -57,18 +59,17 @@ impl Engine {
 
         let event_loop = EventLoop::new();
 
-        let mut window_builder = WindowBuilder::new()
+        let window_builder = WindowBuilder::new()
             .with_inner_size(logical_size)
             .with_title(title);
 
         let window = window_builder.build(&event_loop).unwrap();
         let window_size = window.inner_size();
         let window_size = UVec2::new(window_size.width, window_size.height);
-        dbg!(window_size);
-        let renderer = pollster::block_on(Renderer::new(
+        let renderer = Some(pollster::block_on(Renderer::new(
             &window,
             UVec2::new(window_size.x, window_size.y),
-        ));
+        )));
 
         let camera = Camera::new_with_far(1000., window_size, window.scale_factor() as _);
         Self {
@@ -89,9 +90,13 @@ impl Engine {
     }
 
     pub fn update<Game: Nimbus + 'static>(&mut self, game: &mut Game) {
-        game.update(self);
-        prepare_camera_buffers(&self.renderer, &mut self.camera);
-        self.renderer.render(&self.camera, &mut self.ui);
+        self.ui.renderer = self.renderer.take();
+        game.update(self, self.time.delta_seconds());
+        let mut renderer = self.ui.renderer.take().unwrap();
+        game.render(&mut renderer, self.time.delta_seconds());
+        prepare_camera_buffers(&renderer, &mut self.camera);
+        renderer.render(&self.camera, &mut self.ui);
+        self.renderer = Some(renderer);
         self.time.update();
     }
 
@@ -105,7 +110,7 @@ impl Engine {
 
         #[cfg(target_arch = "wasm32")]
         {
-            // Winit prevents sizing with CSS, so we have to set
+            // winit prevents sizing with CSS, so we have to set
             // the size manually when on web.
             use winit::dpi::PhysicalSize;
             window.set_inner_size(PhysicalSize::new(450, 400));
@@ -139,7 +144,7 @@ impl Engine {
                     WindowEvent::Resized(physical_size) => {
                         let window_size = UVec2::new(physical_size.width, physical_size.height);
                         self.window_size = window_size;
-                        self.renderer.resize(window_size);
+                        self.renderer.as_mut().unwrap().resize(window_size);
                         self.ui.resize(window_size.as_vec2());
                     }
                     WindowEvent::ScaleFactorChanged {
@@ -148,7 +153,8 @@ impl Engine {
                     } => {
                         dbg!(scale_factor);
                         let window_size = UVec2::new(new_inner_size.width, new_inner_size.height);
-                        self.renderer.resize(window_size);
+
+                        self.renderer.as_mut().unwrap().resize(window_size);
                         self.ui.resize(window_size.as_vec2());
                     }
                     WindowEvent::KeyboardInput { ref input, .. } => {
@@ -169,6 +175,14 @@ impl Engine {
                 _ => {}
             }
         });
+    }
+
+    pub fn load_texture(&mut self, bytes: &[u8]) -> arena::ArenaId {
+        self.renderer.as_mut().unwrap().load_texture(bytes)
+    }
+
+    pub fn get_viewport(&self) -> Vec2 {
+        self.renderer.as_ref().unwrap().viewport.as_vec2()
     }
 }
 

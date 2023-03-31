@@ -4,7 +4,7 @@ use glam::Vec3;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    areana::ArenaId,
+    arena::ArenaId,
     camera::CameraBindGroupType,
     renderer::{
         debug_mesh::PreparedDebugMeshItem,
@@ -17,7 +17,7 @@ use crate::{
 
 pub fn prepare_mesh2d_for_batching(renderer: &mut Renderer) -> Vec<PreparedRenderItem> {
     let mut meshes = renderer
-        .render_batch_2d
+        .meshes2d
         .drain(0..)
         .collect::<Vec<(Mesh2d, Vec3)>>();
     meshes.sort_unstable_by(|a, b| match a.1.z.partial_cmp(&b.1.z) {
@@ -199,7 +199,7 @@ pub fn prepare_ui_for_batching(ui: &mut Ui, renderer: &mut Renderer) -> Vec<Prep
 
 pub fn prepare_debug_mesh_for_batching(renderer: &mut Renderer) -> Vec<PreparedDebugMeshItem> {
     renderer
-        .render_batch_debug
+        .debug_meshes
         .drain(0..)
         .map(|debug_mesh| {
             let vertex_buffer =

@@ -1,15 +1,10 @@
-use std::{collections::HashMap, ops::Range, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
-use glam::{Mat4, UVec2, Vec2, Vec3};
-use wgpu::Extent3d;
-use winit::window::Window;
+use glam::{Mat4, UVec2, Vec2};
 
 use crate::{
-    areana::ArenaId,
-    components::{
-        ray::{Ray, Ray3D},
-        transform::Transform,
-    },
+    arena::ArenaId,
+    components::{ray::Ray3D, transform::Transform},
 };
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
