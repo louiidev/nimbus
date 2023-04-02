@@ -1,13 +1,21 @@
 pub mod arena;
+pub mod asset_loader;
 pub mod camera;
 pub mod components;
+pub mod file_system_watcher;
 pub mod input;
+pub mod internal_image;
 pub mod renderer;
 pub mod systems;
 pub mod time;
 pub mod utils;
 pub mod window;
 
+#[cfg(feature = "debug-egui")]
+use ::egui::FontDefinitions;
+use asset_loader::AssetPipeline;
+#[cfg(feature = "debug-egui")]
+use egui_winit_platform::{Platform, PlatformDescriptor};
 pub use glam as math;
 use math::Vec2;
 pub use winit;
@@ -44,6 +52,9 @@ pub struct Engine {
     pub window_size: UVec2,
     pub(crate) time: Time,
     pub ui: Ui,
+    pub(crate) asset_pipeline: AssetPipeline,
+    #[cfg(feature = "debug-egui")]
+    pub egui_platform: Platform,
 }
 
 impl Engine {
@@ -72,6 +83,16 @@ impl Engine {
         )));
 
         let camera = Camera::new_with_far(1000., window_size, window.scale_factor() as _);
+
+        #[cfg(feature = "debug-egui")]
+        let egui_platform = Platform::new(PlatformDescriptor {
+            physical_width: width as u32,
+            physical_height: height as u32,
+            scale_factor: window.scale_factor(),
+            font_definitions: FontDefinitions::default(),
+            style: Default::default(),
+        });
+
         Self {
             event_loop: Some(event_loop),
             window,
@@ -81,6 +102,9 @@ impl Engine {
             window_size,
             time: Time::default(),
             ui: Ui::new(window_size.as_vec2()),
+            asset_pipeline: AssetPipeline::default(),
+            #[cfg(feature = "debug-egui")]
+            egui_platform,
         }
     }
 
@@ -90,14 +114,24 @@ impl Engine {
     }
 
     pub fn update<Game: Nimbus + 'static>(&mut self, game: &mut Game) {
+        #[cfg(feature = "debug-egui")]
+        self.egui_platform
+            .update_time(self.time.elapsed().as_secs_f64());
         self.ui.renderer = self.renderer.take();
         game.update(self, self.time.delta_seconds());
         let mut renderer = self.ui.renderer.take().unwrap();
         game.render(&mut renderer, self.time.delta_seconds());
         prepare_camera_buffers(&renderer, &mut self.camera);
-        renderer.render(&self.camera, &mut self.ui);
+        renderer.render(
+            &self.camera,
+            &mut self.ui,
+            #[cfg(feature = "debug-egui")]
+            &mut self.egui_platform,
+            &self.window,
+        );
         self.renderer = Some(renderer);
         self.time.update();
+        self.watch_change();
     }
 
     pub async fn run_async<Game: Nimbus + 'static>(mut self, mut game: Game) {
@@ -132,14 +166,17 @@ impl Engine {
         game.init(&mut self);
 
         event_loop.run(move |event, _, control_flow| {
-            let window = &self.window;
+            let current_window_id = self.window.id();
             *control_flow = ControlFlow::Wait;
+
+            #[cfg(feature = "debug-egui")]
+            self.egui_platform.handle_event(&event);
 
             match event {
                 Event::WindowEvent {
                     ref event,
                     window_id,
-                } if window_id == window.id() => match event {
+                } if window_id == current_window_id => match event {
                     WindowEvent::CloseRequested {} => *control_flow = ControlFlow::Exit,
                     WindowEvent::Resized(physical_size) => {
                         let window_size = UVec2::new(physical_size.width, physical_size.height);
@@ -175,10 +212,6 @@ impl Engine {
                 _ => {}
             }
         });
-    }
-
-    pub fn load_texture(&mut self, bytes: &[u8]) -> arena::ArenaId {
-        self.renderer.as_mut().unwrap().load_texture(bytes)
     }
 
     pub fn get_viewport(&self) -> Vec2 {

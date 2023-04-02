@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-winit = "0.27.5"
+winit = "0.28.3"
 wgpu = "0.15"
 pollster = "0.2"
 bytemuck = { version = "1.12", features = [ "derive" ] }
@@ -17,7 +17,17 @@ guillotiere = "0.6.2"
 # ahash = "0.8.3"
 fontdue = "0.7.2"
 cfg-if = "1"
+asefile = "0.3.5"
+notify = { version = "5.1.0", optional = true }
+egui = { version = "0.21.0", optional = true } 
+egui_wgpu_backend = { version ="0.22", optional = true}
+egui_winit_platform  = { version ="0.18.0", optional = true }
 
+
+[features]
+default = ["hot-reloading", "debug-egui"]
+hot-reloading=["dep:notify"]
+debug-egui = ["dep:egui_wgpu_backend", "dep:egui_winit_platform", "dep:egui"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"

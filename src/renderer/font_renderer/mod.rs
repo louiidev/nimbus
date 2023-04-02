@@ -62,7 +62,7 @@ impl FontRenderer {
                 device,
                 queue,
                 &temp_texture_data.data,
-                temp_texture_data.size.as_uvec2(),
+                (temp_texture_data.size.x as _, temp_texture_data.size.y as _),
             );
 
             if let Some(texture_id) = self

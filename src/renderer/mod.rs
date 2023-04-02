@@ -6,9 +6,12 @@ pub(crate) mod pipelines;
 pub mod texture;
 pub mod ui;
 
-use std::{collections::HashMap, sync::Arc};
-
+#[cfg(feature = "debug-egui")]
+use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
+#[cfg(feature = "debug-egui")]
+use egui_winit_platform::Platform;
 use glam::{UVec2, Vec2, Vec3};
+use std::{collections::HashMap, sync::Arc};
 use wgpu::{Sampler, SurfaceConfiguration};
 use winit::window::Window;
 
@@ -16,6 +19,7 @@ use crate::{
     arena::{Arena, ArenaId},
     camera::Camera,
     components::color::Color,
+    internal_image::InternalImage,
     systems::{
         prepare_render::{
             prepare_debug_mesh_for_batching, prepare_mesh2d_for_batching, prepare_ui_for_batching,
@@ -62,6 +66,8 @@ pub struct Renderer {
     // Used for drawing lines and debug shapes
     // TODO: remove from release build
     pub(crate) debug_meshes: Vec<DebugMesh>,
+    #[cfg(feature = "debug-egui")]
+    egui_render_pass: RenderPass,
 }
 impl Renderer {
     pub fn get_viewport(&self) -> Vec2 {
@@ -141,6 +147,9 @@ impl Renderer {
             })
         };
 
+        #[cfg(feature = "debug-egui")]
+        let egui_render_pass = RenderPass::new(&device, surface_format, 1);
+
         let mut renderer = Self {
             textures: Arena::new(),
             surface,
@@ -158,6 +167,8 @@ impl Renderer {
             viewport,
             surface_config,
             font_renderer: FontRenderer::new(),
+            #[cfg(feature = "debug-egui")]
+            egui_render_pass,
         };
 
         renderer
@@ -187,9 +198,16 @@ impl Renderer {
         }
     }
 
-    pub fn load_texture(&mut self, bytes: &[u8]) -> ArenaId {
-        let texture = Texture::from_bytes(&self.device, &self.queue, bytes);
+    pub fn load_texture(&mut self, image: InternalImage) -> ArenaId {
+        let texture =
+            Texture::from_detailed_bytes(&self.device, &self.queue, &image.data, image.size);
         self.textures.insert(texture)
+    }
+
+    pub fn replace_texture(&mut self, id: ArenaId, image: InternalImage) {
+        let texture =
+            Texture::from_detailed_bytes(&self.device, &self.queue, &image.data, image.size);
+        *self.textures.get_mut(id).unwrap() = texture;
     }
 
     pub fn load_font(&mut self, bytes: &[u8]) -> ArenaId {
@@ -202,24 +220,27 @@ impl Renderer {
         self.texture_samplers.get(&sampler_type).unwrap()
     }
 
-    // pub fn move_temp_image_batches_from_font_renderer(
-    //     textures: &mut Arena<Texture>,
-    //     font_renderer: &mut FontRenderer,
-    //     device: &Device,
-    //     queue: &Queue,
-    // ) {
-    //     let temp_images: HashMap<(FloatOrd, ArenaId), TempImageData> =
-    //         font_renderer.images_to_upload.drain().collect();
+    pub fn render(
+        &mut self,
+        camera: &Camera,
+        ui: &mut Ui,
+        #[cfg(feature = "debug-egui")] egui_platform: &mut Platform,
+        window: &Window,
+    ) {
+        #[cfg(feature = "debug-egui")]
+        egui_platform.begin_frame();
 
-    //     for (key, image) in temp_images {
-    //         if let Some(key) = font_renderer.texture_mapping.get(&key).copied() {
-    //             let texture = Texture::from_bytes(&device, &queue, &image.data);
-    //             *textures.get_mut(key).unwrap() = texture;
-    //         }
-    //     }
-    // }
+        let ctx = egui_platform.context();
 
-    pub fn render(&mut self, camera: &Camera, ui: &mut Ui) {
+        egui::SidePanel::right("egui_demo_panel")
+            .resizable(false)
+            .default_width(150.)
+            .show(&ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.heading("✒ egui demos");
+                });
+            });
+
         let output = self
             .surface
             .get_current_texture()
@@ -228,6 +249,11 @@ impl Renderer {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+
+        #[cfg(feature = "debug-egui")]
+        let full_output = egui_platform.end_frame(Some(window));
+        #[cfg(feature = "debug-egui")]
+        let paint_jobs = egui_platform.context().tessellate(full_output.shapes);
 
         let mut command_encoder =
             self.device
@@ -281,7 +307,47 @@ impl Renderer {
             );
         }
 
-        self.queue.submit(std::iter::once(command_encoder.finish()));
-        output.present();
+        #[cfg(feature = "debug-egui")]
+        {
+            let screen_descriptor = ScreenDescriptor {
+                physical_width: self.surface_config.width,
+                physical_height: self.surface_config.height,
+                scale_factor: 1. as f32,
+            };
+            let tdelta: egui::TexturesDelta = full_output.textures_delta;
+            self.egui_render_pass
+                .add_textures(&self.device, &self.queue, &tdelta)
+                .expect("add texture ok");
+            self.egui_render_pass.update_buffers(
+                &self.device,
+                &self.queue,
+                &paint_jobs,
+                &screen_descriptor,
+            );
+
+            // Record all render passes.
+            self.egui_render_pass
+                .execute(
+                    &mut command_encoder,
+                    &view,
+                    &paint_jobs,
+                    &screen_descriptor,
+                    None,
+                )
+                .unwrap();
+
+            self.queue.submit(std::iter::once(command_encoder.finish()));
+            output.present();
+
+            self.egui_render_pass
+                .remove_textures(tdelta)
+                .expect("remove texture ok");
+        }
+
+        #[cfg(not(feature = "debug-egui"))]
+        {
+            self.queue.submit(std::iter::once(command_encoder.finish()));
+            output.present();
+        }
     }
 }

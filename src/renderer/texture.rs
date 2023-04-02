@@ -67,11 +67,11 @@ impl Texture {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         bytes: &[u8],
-        size: UVec2,
+        size: (usize, usize),
     ) -> Self {
         let size = Extent3d {
-            width: size.x,
-            height: size.y,
+            width: size.0 as _,
+            height: size.1 as _,
             depth_or_array_layers: 1,
         };
 
@@ -114,11 +114,12 @@ impl Texture {
 
     pub fn from_image(device: &wgpu::Device, queue: &wgpu::Queue, image: &DynamicImage) -> Self {
         let rgba = image.to_rgba8();
-        let size = UVec2 {
-            x: rgba.width(),
-            y: rgba.height(),
-        };
 
-        Texture::from_detailed_bytes(device, queue, image.as_bytes(), size)
+        Texture::from_detailed_bytes(
+            device,
+            queue,
+            image.as_bytes(),
+            (rgba.width() as _, rgba.height() as _),
+        )
     }
 }
