@@ -108,6 +108,10 @@ impl Engine {
         }
     }
 
+    pub fn egui_ctx(&mut self) -> egui::Context {
+        self.egui_platform.context()
+    }
+
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
     pub fn run<Game: Nimbus + 'static>(self, game: Game) {
         pollster::block_on(self.run_async(game));
@@ -118,6 +122,8 @@ impl Engine {
         self.egui_platform
             .update_time(self.time.elapsed().as_secs_f64());
         self.ui.renderer = self.renderer.take();
+        #[cfg(feature = "debug-egui")]
+        self.egui_platform.begin_frame();
         game.update(self, self.time.delta_seconds());
         let mut renderer = self.ui.renderer.take().unwrap();
         game.render(&mut renderer, self.time.delta_seconds());

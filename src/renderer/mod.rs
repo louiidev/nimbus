@@ -227,20 +227,6 @@ impl Renderer {
         #[cfg(feature = "debug-egui")] egui_platform: &mut Platform,
         window: &Window,
     ) {
-        #[cfg(feature = "debug-egui")]
-        egui_platform.begin_frame();
-
-        let ctx = egui_platform.context();
-
-        egui::SidePanel::right("egui_demo_panel")
-            .resizable(false)
-            .default_width(150.)
-            .show(&ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("✒ egui demos");
-                });
-            });
-
         let output = self
             .surface
             .get_current_texture()

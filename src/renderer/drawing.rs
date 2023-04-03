@@ -2,7 +2,7 @@ use crate::{
     arena::ArenaId,
     components::{color::Color, rect::Rect, sprite::Sprite, text::Text, transform::Transform},
 };
-use glam::Vec2;
+use glam::{Vec2, Vec3};
 
 use super::{
     debug_mesh::DebugMesh,
@@ -48,6 +48,10 @@ impl Renderer {
         );
 
         todo!("Render some fonts")
+    }
+
+    pub fn draw_sprite_basic(&mut self, sprite: &Sprite, position: Vec3) {
+        self.draw_sprite(sprite, &Transform::from_translation(position))
     }
 
     pub fn draw_sprite(&mut self, sprite: &Sprite, transform: &Transform) {

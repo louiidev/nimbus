@@ -69,7 +69,7 @@ impl AssetPipeline {
     pub fn load_texture(&mut self, file: &PathBuf) -> InternalImage {
         let extension = file.extension().expect("Missing extension");
         let bytes = match extension.to_str().unwrap() {
-            "asesprite" => {
+            "aseprite" => {
                 let ase = AsepriteFile::read_file(&file).unwrap();
 
                 InternalImage {
