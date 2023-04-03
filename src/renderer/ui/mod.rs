@@ -132,7 +132,6 @@ impl Ui {
 
     pub fn text(&mut self, text: Text, position: Vec2) -> Vec2 {
         let container_size = self.get_available_space();
-        dbg!(&container_size);
         let renderer = self.renderer.as_mut().unwrap();
         let text_glyphs = self.font_renderer.queue_text(
             &text,

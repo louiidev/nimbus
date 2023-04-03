@@ -37,6 +37,11 @@ use self::{
     ui::Ui,
 };
 
+pub struct Viewport {
+    size: UVec2,
+    scale: f32,
+}
+
 pub struct Renderer {
     // The GPU textures
     pub(crate) textures: Arena<Texture>,
@@ -52,7 +57,7 @@ pub struct Renderer {
 
     pub clear_color: Color,
 
-    pub(crate) viewport: UVec2,
+    pub(crate) viewport: Viewport,
 
     // Render pipelines for each drawing type.
     // TODO: needs to support custom pipelines
@@ -71,10 +76,10 @@ pub struct Renderer {
 }
 impl Renderer {
     pub fn get_viewport(&self) -> Vec2 {
-        self.viewport.as_vec2()
+        self.viewport.size.as_vec2()
     }
 
-    pub async fn new(window: &Window, viewport: UVec2) -> Self {
+    pub async fn new(window: &Window, viewport: UVec2, scale: f32) -> Self {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -164,7 +169,10 @@ impl Renderer {
                 (TextureSampler::Linear, Arc::new(default_sampler_linear)),
                 (TextureSampler::Nearest, Arc::new(default_sampler_nearest)),
             ]),
-            viewport,
+            viewport: Viewport {
+                size: viewport,
+                scale,
+            },
             surface_config,
             font_renderer: FontRenderer::new(),
             #[cfg(feature = "debug-egui")]
@@ -189,7 +197,7 @@ impl Renderer {
 
     pub(crate) fn resize(&mut self, new_size: UVec2) {
         if new_size.x > 0 && new_size.y > 0 {
-            self.viewport = UVec2::new(new_size.x, new_size.y);
+            self.viewport.size = UVec2::new(new_size.x, new_size.y);
             self.surface_config.width = new_size.x;
             self.surface_config.height = new_size.y;
             self.surface.configure(&self.device, &self.surface_config);
@@ -298,7 +306,7 @@ impl Renderer {
             let screen_descriptor = ScreenDescriptor {
                 physical_width: self.surface_config.width,
                 physical_height: self.surface_config.height,
-                scale_factor: 1. as f32,
+                scale_factor: self.viewport.scale,
             };
             let tdelta: egui::TexturesDelta = full_output.textures_delta;
             self.egui_render_pass
