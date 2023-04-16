@@ -4,7 +4,7 @@ use glam::{Mat4, UVec2, Vec2};
 
 use crate::{
     arena::ArenaId,
-    components::{ray::Ray3D, transform::Transform},
+    components::{ray::Raycast3D, transform::Transform},
 };
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
@@ -257,7 +257,7 @@ impl Default for OrthographicProjection {
             right: 1.0,
             bottom: -1.0,
             top: 1.0,
-            near: 0.0,
+            near: -10.0,
             far: 1000.0,
             window_origin: WindowOrigin::Center,
             scaling_mode: ScalingMode::WindowSize,
@@ -356,7 +356,7 @@ impl Camera {
         &self,
         camera_transform: &Transform,
         viewport_position: Vec2,
-    ) -> Option<Ray3D> {
+    ) -> Option<Raycast3D> {
         let target_size = self.logical_viewport_size();
         let ndc = viewport_position * 2. / target_size - Vec2::ONE;
         let projection = self.projection_matrix();
@@ -365,7 +365,7 @@ impl Camera {
         let world_near_plane = ndc_to_world.project_point3(ndc.extend(1.));
         // Using EPSILON because an ndc with Z = 0 returns NaNs.
         let world_far_plane = ndc_to_world.project_point3(ndc.extend(f32::EPSILON));
-        (!world_near_plane.is_nan() && !world_far_plane.is_nan()).then_some(Ray3D {
+        (!world_near_plane.is_nan() && !world_far_plane.is_nan()).then_some(Raycast3D {
             origin: world_near_plane,
             direction: (world_far_plane - world_near_plane).normalize(),
         })

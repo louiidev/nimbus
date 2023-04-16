@@ -77,13 +77,15 @@ impl AssetPipeline {
                     size: ase.size(),
                 }
             }
-            _ => {
-                let image = image::open(&file).unwrap();
-                InternalImage {
-                    data: image.as_bytes().to_vec(),
-                    size: (image.width() as _, image.height() as _),
+            _ => match image::open(file) {
+                Ok(img) => InternalImage {
+                    data: img.as_bytes().to_vec(),
+                    size: (img.width() as _, img.height() as _),
+                },
+                Err(e) => {
+                    panic!("{}", e);
                 }
-            }
+            },
         };
         bytes
     }

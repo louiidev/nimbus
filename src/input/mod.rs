@@ -59,6 +59,11 @@ impl InputManager {
             self.mouse_position.y = mouse_pos.y;
         }
     }
+
+    pub fn clear(&mut self) {
+        self.keyboards_inputs.clear();
+        self.mouse_button_inputs.clear();
+    }
 }
 
 #[derive(Debug, Clone)]

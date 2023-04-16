@@ -6,6 +6,7 @@ pub(crate) mod pipelines;
 pub mod texture;
 pub mod ui;
 
+use egui::TextureId;
 #[cfg(feature = "debug-egui")]
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 #[cfg(feature = "debug-egui")]
@@ -40,6 +41,8 @@ use self::{
 pub struct Renderer {
     // The GPU textures
     pub(crate) textures: Arena<Texture>,
+    #[cfg(feature = "debug-egui")]
+    pub egui_texture_map: HashMap<ArenaId, TextureId>,
 
     pub(crate) font_renderer: FontRenderer,
 
@@ -152,6 +155,8 @@ impl Renderer {
 
         let mut renderer = Self {
             textures: Arena::new(),
+            #[cfg(feature = "debug-egui")]
+            egui_texture_map: HashMap::default(),
             surface,
             device,
             queue,
@@ -201,7 +206,22 @@ impl Renderer {
     pub fn load_texture(&mut self, image: InternalImage) -> ArenaId {
         let texture =
             Texture::from_detailed_bytes(&self.device, &self.queue, &image.data, image.size);
-        self.textures.insert(texture)
+        let filter = if let TextureSampler::Linear = texture.sampler {
+            wgpu::FilterMode::Linear
+        } else {
+            wgpu::FilterMode::Nearest
+        };
+        let id = self.egui_render_pass.egui_texture_from_wgpu_texture(
+            &self.device,
+            &texture.view,
+            filter,
+        );
+
+        let arena_id = self.textures.insert(texture);
+
+        self.egui_texture_map.insert(arena_id, id);
+
+        arena_id
     }
 
     pub fn replace_texture(&mut self, id: ArenaId, image: InternalImage) {
@@ -300,6 +320,7 @@ impl Renderer {
                 physical_height: self.surface_config.height,
                 scale_factor: 1. as f32,
             };
+
             let tdelta: egui::TexturesDelta = full_output.textures_delta;
             self.egui_render_pass
                 .add_textures(&self.device, &self.queue, &tdelta)

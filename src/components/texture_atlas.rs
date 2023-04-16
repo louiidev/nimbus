@@ -1,12 +1,16 @@
 use glam::Vec2;
 
+use crate::arena::ArenaId;
+
 use super::rect::Rect;
 
 #[derive(Clone, Default, Debug)]
 pub struct TextureAtlas {
     /// The specific areas of the atlas where each texture can be found
     pub textures: Vec<Rect>,
+    pub texture_id: ArenaId,
     pub size: Vec2,
+    pub tile_size: Vec2,
 }
 
 impl TextureAtlas {
@@ -14,10 +18,40 @@ impl TextureAtlas {
         Self {
             size,
             textures: Vec::new(),
+            tile_size: Vec2::default(),
+            texture_id: ArenaId::first(),
         }
     }
 
-    pub fn new(
+    pub fn new(texture_id: ArenaId, tile_size: Vec2, columns: usize, rows: usize) -> Self {
+        let mut textures = Vec::new();
+
+        for y in 0..rows {
+            for x in 0..columns {
+                let cell = Vec2::new(x as f32, y as f32);
+                let rect_min = tile_size * cell;
+
+                let sprite = Rect {
+                    min: rect_min,
+                    max: rect_min + tile_size,
+                };
+
+                textures.push(sprite);
+            }
+        }
+
+        let grid_size = Vec2::new(columns as f32, rows as f32);
+
+        TextureAtlas {
+            textures,
+            size: tile_size * grid_size,
+            tile_size,
+            texture_id,
+        }
+    }
+
+    pub fn new_padding_offset(
+        texture_id: ArenaId,
         tile_size: Vec2,
         columns: usize,
         rows: usize,
@@ -54,8 +88,10 @@ impl TextureAtlas {
         let grid_size = Vec2::new(columns as f32, rows as f32);
 
         TextureAtlas {
+            texture_id,
             textures,
             size: ((tile_size + current_padding) * grid_size) - current_padding,
+            tile_size,
         }
     }
 

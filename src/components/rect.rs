@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use glam::Vec2;
 
 /// A rectangle defined by two opposite corners.
@@ -17,7 +19,40 @@ pub struct Rect {
     pub max: Vec2,
 }
 
+impl Add<Vec2> for Rect {
+    type Output = Rect;
+    fn add(self, other: Vec2) -> Self {
+        Self {
+            min: self.min + other,
+            max: self.max + other,
+        }
+    }
+}
+
 impl Rect {
+    pub fn intersects_rect(&self, other: &Rect) -> bool {
+        self.min.x < other.max.x
+            && self.max.x > other.min.x
+            && self.max.y > other.min.y
+            && self.min.y < other.max.y
+    }
+
+    pub fn left(&self) -> f32 {
+        self.min.x
+    }
+
+    pub fn right(&self) -> f32 {
+        self.max.x
+    }
+
+    pub fn top(&self) -> f32 {
+        self.max.y
+    }
+
+    pub fn bottom(&self) -> f32 {
+        self.min.y
+    }
+
     /// Create a new rectangle from two corner points.
     ///
     /// The two points do not need to be the minimum and/or maximum corners.

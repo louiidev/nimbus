@@ -1,6 +1,7 @@
 pub mod arena;
 pub mod asset_loader;
 pub mod camera;
+pub mod collisions;
 pub mod components;
 pub mod file_system_watcher;
 pub mod input;
@@ -19,6 +20,11 @@ use egui_winit_platform::{Platform, PlatformDescriptor};
 pub use glam as math;
 use math::Vec2;
 pub use winit;
+
+#[cfg(feature = "debug-egui")]
+pub use egui;
+#[cfg(feature = "debug-egui")]
+pub use egui_inspect;
 
 use camera::Camera;
 use glam::UVec2;
@@ -117,14 +123,25 @@ impl Engine {
         pollster::block_on(self.run_async(game));
     }
 
+    pub fn get_render_ctx(&mut self) -> &mut Renderer {
+        if let Some(renderer) = self.renderer.as_mut() {
+            renderer
+        } else {
+            self.ui.renderer.as_mut().unwrap()
+        }
+    }
+
     pub fn update<Game: Nimbus + 'static>(&mut self, game: &mut Game) {
         #[cfg(feature = "debug-egui")]
-        self.egui_platform
-            .update_time(self.time.elapsed().as_secs_f64());
+        {
+            self.egui_platform
+                .update_time(self.time.elapsed().as_secs_f64());
+            self.egui_platform.begin_frame();
+        }
+
         self.ui.renderer = self.renderer.take();
-        #[cfg(feature = "debug-egui")]
-        self.egui_platform.begin_frame();
         game.update(self, self.time.delta_seconds());
+        self.input.clear();
         let mut renderer = self.ui.renderer.take().unwrap();
         game.render(&mut renderer, self.time.delta_seconds());
         prepare_camera_buffers(&renderer, &mut self.camera);

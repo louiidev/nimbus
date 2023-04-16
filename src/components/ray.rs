@@ -2,12 +2,7 @@ use glam::{Vec2, Vec3};
 
 use super::rect::Rect;
 
-pub struct Ray {
-    pub origin: Vec2,
-    pub direction: Vec2,
-}
-
-pub struct Ray3D {
+pub struct Raycast3D {
     pub origin: Vec3,
     pub direction: Vec3,
 }
@@ -17,11 +12,20 @@ pub struct RaycastHitInfo {
     pub contact_normal: Vec2,
 }
 
-impl Ray {}
-
 pub struct Raycast2D {
     pub origin: Vec2,    // Starting point of the ray.
     pub direction: Vec2, // Direction vector of the ray.
+    pub length: f32,
+}
+
+impl Default for Raycast2D {
+    fn default() -> Self {
+        Self {
+            origin: Vec2::ZERO,
+            direction: Vec2::X,
+            length: f32::MAX,
+        }
+    }
 }
 
 impl Raycast2D {
