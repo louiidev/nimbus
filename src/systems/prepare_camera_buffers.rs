@@ -55,10 +55,7 @@ pub fn prepare_camera_buffers(renderer: &Renderer, camera: &mut Camera) {
     );
 
     // 2D UI
-    let projection = camera.projection_matrix_ui(Vec2::new(
-        renderer.viewport.x as f32,
-        renderer.viewport.y as f32,
-    ));
+    let projection = camera.projection_matrix_ui(renderer.get_viewport());
     let transform = Transform {
         translation: Vec3::new(0., 0., 999.),
         ..Default::default()

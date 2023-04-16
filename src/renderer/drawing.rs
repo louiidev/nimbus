@@ -40,7 +40,7 @@ impl Renderer {
 
         let _data = self.font_renderer.queue_text(
             text,
-            self.viewport.as_vec2(),
+            self.get_viewport(),
             fontdue::layout::CoordinateSystem::PositiveYUp,
             &mut self.textures,
             &self.device,

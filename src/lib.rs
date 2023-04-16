@@ -232,7 +232,7 @@ impl Engine {
     }
 
     pub fn get_viewport(&self) -> Vec2 {
-        self.renderer.as_ref().unwrap().viewport.as_vec2()
+        self.renderer.as_ref().unwrap().get_viewport()
     }
 }
 
