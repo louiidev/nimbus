@@ -1,7 +1,6 @@
 pub mod arena;
 pub mod asset_loader;
 pub mod camera;
-pub mod collisions;
 pub mod components;
 pub mod file_system_watcher;
 pub mod input;
@@ -19,7 +18,12 @@ use asset_loader::AssetPipeline;
 use egui_winit_platform::{Platform, PlatformDescriptor};
 pub use glam as math;
 use math::Vec2;
-pub use winit;
+pub use sdl2;
+use sdl2::{
+    event::{Event, WindowEvent},
+    video::Window,
+    Sdl,
+};
 
 #[cfg(feature = "debug-egui")]
 pub use egui;
@@ -33,12 +37,6 @@ use renderer::{ui::Ui, Renderer};
 use systems::prepare_camera_buffers::prepare_camera_buffers;
 use time::Time;
 use window::WindowDescriptor;
-use winit::{
-    dpi::LogicalSize,
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
-};
 
 pub trait Nimbus {
     fn init(&mut self, _engine: &mut Engine) {}
@@ -49,9 +47,11 @@ pub trait Nimbus {
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+use crate::input::{InputState, KeyboardInput};
+
 pub struct Engine {
+    sdl: Sdl,
     window: Window,
-    event_loop: Option<EventLoop<()>>,
     pub(crate) renderer: Option<Renderer>,
     pub input: InputManager,
     pub camera: Camera,
@@ -72,35 +72,39 @@ impl Engine {
             ..
         } = window_descriptor;
 
-        let logical_size = LogicalSize::new(width, height);
+        let sdl_context = sdl2::init().unwrap();
+        let video_subsystem = sdl_context.video().unwrap();
 
-        let event_loop = EventLoop::new();
+        let window = video_subsystem
+            .window(title, width as u32, height as u32)
+            .position_centered()
+            .resizable()
+            .metal_view()
+            .build()
+            .map_err(|e| e.to_string())
+            .unwrap();
 
-        let window_builder = WindowBuilder::new()
-            .with_inner_size(logical_size)
-            .with_title(title);
-
-        let window = window_builder.build(&event_loop).unwrap();
-        let window_size = window.inner_size();
-        let window_size = UVec2::new(window_size.width, window_size.height);
+        // let logical_size = LogicalSize::new(width, height);
+        let window_size = window.size();
+        let window_size = UVec2::new(window_size.0, window_size.1);
         let renderer = Some(pollster::block_on(Renderer::new(
             &window,
             UVec2::new(window_size.x, window_size.y),
         )));
 
-        let camera = Camera::new_with_far(1000., window_size, window.scale_factor() as _);
+        let camera = Camera::new_with_far(1000., window_size, 1. as _);
 
         #[cfg(feature = "debug-egui")]
         let egui_platform = Platform::new(PlatformDescriptor {
             physical_width: width as u32,
             physical_height: height as u32,
-            scale_factor: window.scale_factor(),
+            scale_factor: 1.,
             font_definitions: FontDefinitions::default(),
             style: Default::default(),
         });
 
         Self {
-            event_loop: Some(event_loop),
+            sdl: sdl_context,
             window,
             renderer,
             input: InputManager::default(),
@@ -114,6 +118,7 @@ impl Engine {
         }
     }
 
+    #[cfg(feature = "debug-egui")]
     pub fn egui_ctx(&mut self) -> egui::Context {
         self.egui_platform.context()
     }
@@ -165,76 +170,65 @@ impl Engine {
             }
         }
 
-        #[cfg(target_arch = "wasm32")]
-        {
-            // winit prevents sizing with CSS, so we have to set
-            // the size manually when on web.
-            use winit::dpi::PhysicalSize;
-            window.set_inner_size(PhysicalSize::new(450, 400));
-
-            use winit::platform::web::WindowExtWebSys;
-            web_sys::window()
-                .and_then(|win| win.document())
-                .and_then(|doc| {
-                    let dst = doc.get_element_by_id("wasm-example")?;
-                    let canvas = web_sys::Element::from(window.canvas());
-                    dst.append_child(&canvas).ok()?;
-                    Some(())
-                })
-                .expect("Couldn't append canvas to document body.");
-        }
-
-        let event_loop = self.event_loop.take().unwrap();
-
         game.init(&mut self);
 
-        event_loop.run(move |event, _, control_flow| {
-            let current_window_id = self.window.id();
-            *control_flow = ControlFlow::Wait;
-
-            #[cfg(feature = "debug-egui")]
-            self.egui_platform.handle_event(&event);
-
-            match event {
-                Event::WindowEvent {
-                    ref event,
-                    window_id,
-                } if window_id == current_window_id => match event {
-                    WindowEvent::CloseRequested {} => *control_flow = ControlFlow::Exit,
-                    WindowEvent::Resized(physical_size) => {
-                        let window_size = UVec2::new(physical_size.width, physical_size.height);
+        let mut event_pump = self
+            .sdl
+            .event_pump()
+            .expect("Could not create sdl event pump");
+        'running: loop {
+            for event in event_pump.poll_iter() {
+                match event {
+                    Event::Window {
+                        window_id,
+                        win_event: WindowEvent::SizeChanged(width, height),
+                        ..
+                    } if window_id == self.window.id() => {
+                        let window_size = UVec2::new(width as u32, height as u32);
                         self.window_size = window_size;
                         self.renderer.as_mut().unwrap().resize(window_size);
                         self.ui.resize(window_size.as_vec2());
                     }
-                    WindowEvent::ScaleFactorChanged {
-                        new_inner_size,
-                        scale_factor,
-                    } => {
-                        dbg!(scale_factor);
-                        let window_size = UVec2::new(new_inner_size.width, new_inner_size.height);
-
-                        self.renderer.as_mut().unwrap().resize(window_size);
-                        self.ui.resize(window_size.as_vec2());
-                    }
-                    WindowEvent::KeyboardInput { ref input, .. } => {
-                        self.input.update_keyboard_input(input);
-                    }
-                    WindowEvent::MouseInput { state, button, .. } => {
-                        self.input.update_mouse_input(state, button);
-                    }
-                    WindowEvent::CursorMoved { position, .. } => {
+                    Event::KeyDown {
+                        keycode: Some(keycode),
+                        ..
+                    } => self.input.update_keyboard_input(KeyboardInput {
+                        state: InputState::Pressed,
+                        key: keycode,
+                    }),
+                    Event::KeyUp {
+                        keycode: Some(keycode),
+                        ..
+                    } => self.input.update_keyboard_input(KeyboardInput {
+                        state: InputState::Released,
+                        key: keycode,
+                    }),
+                    Event::MouseButtonDown { mouse_btn, .. } => {
                         self.input
-                            .update_cursor_position(position, self.window_size, &self.camera);
+                            .update_mouse_input(InputState::Pressed, mouse_btn);
                     }
-                    _ => {}
-                },
 
-                Event::RedrawEventsCleared => *control_flow = ControlFlow::Poll,
-                Event::MainEventsCleared => self.update(&mut game),
-                _ => {}
+                    Event::MouseButtonUp { mouse_btn, .. } => {
+                        self.input
+                            .update_mouse_input(InputState::Released, mouse_btn);
+                    }
+
+                    Event::MouseMotion { x, y, .. } => self.input.update_cursor_position(
+                        (x as f32, y as f32),
+                        self.window_size,
+                        &self.camera,
+                    ),
+
+                    Event::Quit { .. } => {
+                        break 'running;
+                    }
+
+                    _e => {}
+                }
             }
-        });
+
+            self.update(&mut game);
+        }
     }
 
     pub fn get_viewport(&self) -> Vec2 {

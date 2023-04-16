@@ -25,7 +25,7 @@ impl Nimbus for GameExample {
     fn update(&mut self, engine: &mut Engine, delta: f32) {
         let mut move_direction = Vec2::default();
         for key in engine.input.keyboards_inputs.get_pressed() {
-            use winit::event::VirtualKeyCode::*;
+            use sdl2::keyboard::Keycode::*;
             match key {
                 W => move_direction += Vec2::Y,
                 S => move_direction -= Vec2::Y,
@@ -39,14 +39,14 @@ impl Nimbus for GameExample {
             self.player.1.translation += move_direction.normalize().extend(0.) * delta * 150f32;
         }
 
-        egui::SidePanel::right("egui_demo_panel")
-            .resizable(false)
-            .default_width(150.)
-            .show(&engine.egui_ctx(), |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("✒ egui demos");
-                });
-            });
+        // egui::SidePanel::right("egui_demo_panel")
+        //     .resizable(false)
+        //     .default_width(150.)
+        //     .show(&engine.egui_ctx(), |ui| {
+        //         ui.vertical_centered(|ui| {
+        //             ui.heading("✒ egui demos");
+        //         });
+        //     });
     }
 
     fn render(&mut self, renderer: &mut nimbus::renderer::Renderer, delta: f32) {
