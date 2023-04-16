@@ -6,15 +6,16 @@ pub(crate) mod pipelines;
 pub mod texture;
 pub mod ui;
 
+#[cfg(feature = "debug-egui")]
 use egui::TextureId;
 #[cfg(feature = "debug-egui")]
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 #[cfg(feature = "debug-egui")]
 use egui_winit_platform::Platform;
 use glam::{UVec2, Vec2, Vec3};
+use sdl2::video::Window;
 use std::{collections::HashMap, sync::Arc};
 use wgpu::{Sampler, SurfaceConfiguration};
-use winit::window::Window;
 
 use crate::{
     arena::{Arena, ArenaId},
@@ -82,13 +83,13 @@ impl Renderer {
         self.viewport.size.as_vec2()
     }
 
-    pub async fn new(window: &Window, viewport: UVec2, scale: f32) -> Self {
-        let size = window.inner_size();
+    pub async fn new(window: &Window, viewport: UVec2) -> Self {
+        let size = window.size();
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             dx12_shader_compiler: Default::default(),
         });
-        let surface = unsafe { instance.create_surface(window) }.unwrap();
+        let surface = unsafe { instance.create_surface(&window).unwrap() };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -110,8 +111,8 @@ impl Renderer {
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
-            width: size.width,
-            height: size.height,
+            width: size.0,
+            height: size.1,
             present_mode: surface_caps.present_modes[0],
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: Vec::default(),
@@ -176,7 +177,7 @@ impl Renderer {
             ]),
             viewport: Viewport {
                 size: viewport,
-                scale,
+                scale: 1.,
             },
             surface_config,
             font_renderer: FontRenderer::new(),
@@ -219,6 +220,7 @@ impl Renderer {
         } else {
             wgpu::FilterMode::Nearest
         };
+        #[cfg(feature = "debug-egui")]
         let id = self.egui_render_pass.egui_texture_from_wgpu_texture(
             &self.device,
             &texture.view,
@@ -227,6 +229,7 @@ impl Renderer {
 
         let arena_id = self.textures.insert(texture);
 
+        #[cfg(feature = "debug-egui")]
         self.egui_texture_map.insert(arena_id, id);
 
         arena_id

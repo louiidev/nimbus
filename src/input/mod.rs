@@ -1,9 +1,5 @@
 use glam::{UVec2, Vec2};
-use winit::{
-    dpi::PhysicalPosition,
-    event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode},
-};
-
+use sdl2::{keyboard::Keycode, mouse::MouseButton};
 use std::{collections::HashSet, hash::Hash};
 
 use crate::camera::Camera;
@@ -12,46 +8,47 @@ use crate::camera::Camera;
 pub struct InputManager {
     pub screen_mouse_position: Vec2,
     pub mouse_position: Vec2,
-    pub keyboards_inputs: Input<VirtualKeyCode>,
+    pub keyboards_inputs: Input<Keycode>,
     pub mouse_button_inputs: Input<MouseButton>,
 }
 
-impl InputManager {
-    pub(crate) fn update_keyboard_input(&mut self, input: &KeyboardInput) {
-        let KeyboardInput {
-            virtual_keycode,
-            state,
-            ..
-        } = input;
+pub enum InputState {
+    Pressed,
+    Released,
+}
 
-        if let Some(key_code) = virtual_keycode {
-            match state {
-                ElementState::Pressed => self.keyboards_inputs.press(*key_code),
-                ElementState::Released => self.keyboards_inputs.release(*key_code),
-            }
+pub struct KeyboardInput {
+    pub state: InputState,
+    pub key: Keycode,
+}
+
+impl InputManager {
+    pub(crate) fn update_keyboard_input(&mut self, input: KeyboardInput) {
+        let KeyboardInput { key, state } = input;
+
+        match state {
+            InputState::Pressed => self.keyboards_inputs.press(key),
+            InputState::Released => self.keyboards_inputs.release(key),
         }
     }
 
-    pub(crate) fn update_mouse_input(&mut self, state: &ElementState, button: &MouseButton) {
+    pub(crate) fn update_mouse_input(&mut self, state: InputState, button: MouseButton) {
         match state {
-            ElementState::Pressed => self.mouse_button_inputs.press(*button),
-            ElementState::Released => self.mouse_button_inputs.release(*button),
+            InputState::Pressed => self.mouse_button_inputs.press(button),
+            InputState::Released => self.mouse_button_inputs.release(button),
         }
     }
 
     pub(crate) fn update_cursor_position(
         &mut self,
-        position: &PhysicalPosition<f64>,
+        position: (f32, f32),
         window_size: UVec2,
         camera: &Camera,
     ) {
-        let y_position = window_size.y as f64 - position.y;
+        let y_position = window_size.y as f32 - position.1;
 
         let mouse_pos = camera
-            .viewport_to_world(
-                &camera.transform,
-                Vec2::new(position.x as f32, y_position as f32),
-            )
+            .viewport_to_world(&camera.transform, Vec2::new(position.0, y_position))
             .map(|ray| ray.origin.truncate());
 
         if let Some(mouse_pos) = mouse_pos {
