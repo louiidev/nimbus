@@ -17,7 +17,7 @@ pub struct GameExample {
 
 impl Nimbus for GameExample {
     fn init(&mut self, engine: &mut Engine) {
-        let texture_id = engine.load_texture("./examples/cloud.aseprite");
+        let texture_id = engine.load_texture("./examples/cloud.png");
 
         self.player.0.texture_id = texture_id;
     }

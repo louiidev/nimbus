@@ -28,6 +28,7 @@ impl Camera {
         // TODO: Make this support any projection and not have a weird hack for UI maybe?
         let mut projection = OrthographicProjection {
             far,
+            scale,
             ..Default::default()
         };
 
@@ -173,10 +174,10 @@ pub struct OrthographicProjection {
 impl OrthographicProjection {
     fn get_projection_matrix(&self) -> Mat4 {
         Mat4::orthographic_rh(
-            self.left * self.scale,
-            self.right * self.scale,
-            self.bottom * self.scale,
-            self.top * self.scale,
+            self.left / self.scale,
+            self.right / self.scale,
+            self.bottom / self.scale,
+            self.top / self.scale,
             self.near,
             self.far,
         )

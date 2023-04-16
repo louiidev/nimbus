@@ -86,6 +86,7 @@ impl Engine {
         let renderer = Some(pollster::block_on(Renderer::new(
             &window,
             UVec2::new(window_size.x, window_size.y),
+            window.scale_factor() as f32,
         )));
 
         let camera = Camera::new_with_far(1000., window_size, window.scale_factor() as _);
@@ -211,7 +212,6 @@ impl Engine {
                         new_inner_size,
                         scale_factor,
                     } => {
-                        dbg!(scale_factor);
                         let window_size = UVec2::new(new_inner_size.width, new_inner_size.height);
 
                         self.renderer.as_mut().unwrap().resize(window_size);
@@ -238,7 +238,7 @@ impl Engine {
     }
 
     pub fn get_viewport(&self) -> Vec2 {
-        self.renderer.as_ref().unwrap().viewport.as_vec2()
+        self.renderer.as_ref().unwrap().get_viewport()
     }
 }
 
