@@ -20,6 +20,7 @@ pub use glam as math;
 use math::Vec2;
 pub use sdl2;
 use sdl2::{
+    controller::Axis,
     event::{Event, WindowEvent},
     video::Window,
     Sdl,
@@ -47,7 +48,7 @@ pub trait Nimbus {
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::input::{InputState, KeyboardInput};
+use crate::input::{InputEvent, InputState};
 
 pub struct Engine {
     sdl: Sdl,
@@ -72,8 +73,43 @@ impl Engine {
             ..
         } = window_descriptor;
 
+        let mut input = InputManager::default();
+
         let sdl_context = sdl2::init().unwrap();
+        let game_controller_subsystem = sdl_context.game_controller().unwrap();
         let video_subsystem = sdl_context.video().unwrap();
+
+        let available = game_controller_subsystem
+            .num_joysticks()
+            .map_err(|e| format!("can't enumerate joysticks: {}", e))
+            .unwrap();
+
+        println!("{} joysticks available", available);
+
+        // Iterate over all available joysticks and look for game controllers.
+        let mut controller = (0..available).find_map(|id| {
+            if !game_controller_subsystem.is_game_controller(id) {
+                println!("{} is not a game controller", id);
+                return None;
+            }
+
+            println!("Attempting to open controller {}", id);
+
+            match game_controller_subsystem.open(id) {
+                Ok(c) => {
+                    // We managed to find and open a game controller,
+                    // exit the loop
+                    println!("Success: opened \"{}\"", c.name());
+                    Some(c)
+                }
+                Err(e) => {
+                    println!("failed: {:?}", e);
+                    None
+                }
+            }
+        });
+
+        input.controller = controller;
 
         let window = video_subsystem
             .window(title, width as u32, height as u32)
@@ -107,7 +143,7 @@ impl Engine {
             sdl: sdl_context,
             window,
             renderer,
-            input: InputManager::default(),
+            input,
             camera,
             window_size,
             time: Time::default(),
@@ -192,25 +228,29 @@ impl Engine {
                     Event::KeyDown {
                         keycode: Some(keycode),
                         ..
-                    } => self.input.update_keyboard_input(KeyboardInput {
+                    } => self.input.update_keyboard_input(InputEvent {
                         state: InputState::Pressed,
-                        key: keycode,
+                        value: keycode,
                     }),
                     Event::KeyUp {
                         keycode: Some(keycode),
                         ..
-                    } => self.input.update_keyboard_input(KeyboardInput {
+                    } => self.input.update_keyboard_input(InputEvent {
                         state: InputState::Released,
-                        key: keycode,
+                        value: keycode,
                     }),
                     Event::MouseButtonDown { mouse_btn, .. } => {
-                        self.input
-                            .update_mouse_input(InputState::Pressed, mouse_btn);
+                        self.input.update_mouse_input(InputEvent {
+                            state: InputState::Pressed,
+                            value: mouse_btn,
+                        });
                     }
 
                     Event::MouseButtonUp { mouse_btn, .. } => {
-                        self.input
-                            .update_mouse_input(InputState::Released, mouse_btn);
+                        self.input.update_mouse_input(InputEvent {
+                            state: InputState::Released,
+                            value: mouse_btn,
+                        });
                     }
 
                     Event::MouseMotion { x, y, .. } => self.input.update_cursor_position(
@@ -218,6 +258,44 @@ impl Engine {
                         self.window_size,
                         &self.camera,
                     ),
+
+                    Event::ControllerAxisMotion {
+                        axis: Axis::TriggerLeft,
+                        value: val,
+                        ..
+                    } => {
+                        dbg!("left trigger", val);
+                    }
+                    Event::ControllerAxisMotion {
+                        axis: Axis::TriggerRight,
+                        value: val,
+                        ..
+                    } => {
+                        dbg!("right trigger", val);
+                    }
+                    Event::ControllerAxisMotion { axis, value, .. } => {
+                        // Axis motion is an absolute value in the range
+                        // [-32768, 32767]. Let's simulate a very rough dead
+                        // zone to ignore spurious events.
+                        let dead_zone = 10_000;
+                        if value > dead_zone || value < -dead_zone {
+                            self.input.update_axis(axis, value);
+                        } else {
+                            self.input.update_axis(axis, 0);
+                        }
+                    }
+                    Event::ControllerButtonDown { button, .. } => {
+                        self.input.update_gamepad_button(InputEvent {
+                            state: InputState::Pressed,
+                            value: button,
+                        });
+                    }
+                    Event::ControllerButtonUp { button, .. } => {
+                        self.input.update_gamepad_button(InputEvent {
+                            state: InputState::Released,
+                            value: button,
+                        })
+                    }
 
                     Event::Quit { .. } => {
                         break 'running;

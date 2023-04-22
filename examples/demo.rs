@@ -35,6 +35,11 @@ impl Nimbus for GameExample {
             }
         }
 
+        move_direction += Vec2::new(
+            engine.input.get_axis(sdl2::controller::Axis::LeftX),
+            engine.input.get_axis(sdl2::controller::Axis::LeftY),
+        );
+
         if move_direction != Vec2::default() {
             self.player.1.translation += move_direction.normalize().extend(0.) * delta * 150f32;
         }
