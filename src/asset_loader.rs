@@ -58,6 +58,13 @@ impl Engine {
             }
         }
     }
+
+    pub fn load_audio<P: AsRef<Path>>(&mut self, file: P) -> ArenaId {
+        let actual_path = get_base_path().join(&file);
+        let file = std::fs::File::open(actual_path).unwrap();
+
+        self.audio.add_file(file)
+    }
 }
 
 impl AssetPipeline {

@@ -1,5 +1,6 @@
 pub mod arena;
 pub mod asset_loader;
+pub mod audio;
 pub mod camera;
 pub mod components;
 pub mod file_system_watcher;
@@ -13,7 +14,9 @@ pub mod window;
 
 #[cfg(feature = "debug-egui")]
 use ::egui::FontDefinitions;
+use arena::Arena;
 use asset_loader::AssetPipeline;
+use audio::Audio;
 #[cfg(feature = "debug-egui")]
 use egui_winit_platform::{Platform, PlatformDescriptor};
 pub use glam as math;
@@ -60,6 +63,7 @@ pub struct Engine {
     pub(crate) time: Time,
     pub ui: Ui,
     pub(crate) asset_pipeline: AssetPipeline,
+    pub audio: Audio,
     #[cfg(feature = "debug-egui")]
     pub egui_platform: Platform,
 }
@@ -149,6 +153,7 @@ impl Engine {
             time: Time::default(),
             ui: Ui::new(window_size.as_vec2()),
             asset_pipeline: AssetPipeline::default(),
+            audio: Audio::default(),
             #[cfg(feature = "debug-egui")]
             egui_platform,
         }
