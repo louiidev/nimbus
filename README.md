@@ -21,4 +21,4 @@ A small toy game engine built in rust, built to learn game engine &amp; graphics
 * sdl2 - For windowing, mouse, keyboard input & gamepad support
 * wgpu - For rendering backend, allowing the engine to support Vulkan, DX12 & Metal
 * rodio - For audio playback and decoding
-* Arena(https://github.com/ChevyRay/arena) - For texture, font, audio storage and other contingious data that relys on id's for refs
+* arena(https://github.com/ChevyRay/arena) - For texture, font, audio storage and other contingious data that relys on id's for refs
