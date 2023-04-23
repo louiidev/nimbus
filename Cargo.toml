@@ -35,6 +35,7 @@ rev = "ffa4eb0"
 default = ["hot-reloading"]
 hot-reloading=["dep:notify"]
 debug-egui = ["dep:egui_wgpu_backend", "dep:egui_winit_platform", "dep:egui", "dep:egui_inspect"]
+static-link = ["sdl2/static-link"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"
