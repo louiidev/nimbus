@@ -3,11 +3,10 @@ A small toy game engine built in rust, built to learn game engine &amp; graphics
 
 
 
+
 ## About
+* Plan is to make something similar to bevy but without having to use ECS
 * Why another engine? I've always wanted to build a game engine and learn about how they work
-* Who should use it? probably just me
-* What's with the name? Hey, naming things is hard, I got this name from dragon ball and the flying nimbus!
-* Heavily inspired by bevy and constantly used a reference when building features
 
 
 ## Goals
