@@ -14,8 +14,8 @@ impl Nimbus for Game {
     }
 
     fn update(&mut self, engine: &mut Engine, _delta: f32) {
-        use sdl2::keyboard::Keycode::*;
-        if engine.input.keyboards_inputs.just_pressed(Space) {
+        use nimbus::input::Input::*;
+        if engine.input.inputs.just_pressed(Space) {
             if engine.audio.paused(self.audio_id) {
                 engine.audio.play(self.audio_id);
             } else {

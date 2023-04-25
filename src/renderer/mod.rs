@@ -13,7 +13,6 @@ use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 #[cfg(feature = "debug-egui")]
 use egui_winit_platform::Platform;
 use glam::{UVec2, Vec2, Vec3};
-use sdl2::video::Window;
 use std::{collections::HashMap, sync::Arc};
 use wgpu::{Sampler, SurfaceConfiguration};
 
@@ -23,11 +22,13 @@ use crate::{
     components::color::Color,
     internal_image::InternalImage,
     systems::{
+        prepare_camera_buffers::create_camera_bind_group,
         prepare_render::{
             prepare_debug_mesh_for_batching, prepare_mesh2d_for_batching, prepare_ui_for_batching,
         },
         rendering::{render_2d_batch, render_debug_meshes, render_ui_batch},
     },
+    window::Window,
 };
 
 use self::{
@@ -84,20 +85,7 @@ impl Renderer {
     }
 
     pub async fn new(window: &Window, viewport: UVec2) -> Self {
-        let size = window.size();
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            dx12_shader_compiler: Default::default(),
-        });
-        let surface = unsafe { instance.create_surface(&window).unwrap() };
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .unwrap();
+        let (instance, surface, adapter) = window.create_surface_adapater().await;
         let surface_caps = surface.get_capabilities(&adapter);
         // Shader code in this tutorial assumes an Srgb surface texture. Using a different
         // one will result all the colors comming out darker. If you want to support non
@@ -111,8 +99,8 @@ impl Renderer {
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
-            width: size.0,
-            height: size.1,
+            width: viewport.x,
+            height: viewport.y,
             present_mode: surface_caps.present_modes[0],
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: Vec::default(),
@@ -278,6 +266,16 @@ impl Renderer {
                     label: Some("Render Encoder"),
                 });
 
+        let pipeline = self.render_pipelines.get(&PipelineType::Mesh2d).unwrap();
+
+        let camera_bind_group = create_camera_bind_group(camera, &self.device, pipeline);
+
+        let ui_camera_bind_group = create_camera_bind_group(
+            &Camera::new_ui(self.viewport.size, self.viewport.scale),
+            &self.device,
+            pipeline,
+        );
+
         let sprite_batch = prepare_mesh2d_for_batching(self);
         let debug_mesh_batch = prepare_debug_mesh_for_batching(self);
         let ui_mesh_batch = prepare_ui_for_batching(ui, self);
@@ -299,7 +297,7 @@ impl Renderer {
                 &sprite_batch,
                 &mut render_pass,
                 &self.render_pipelines,
-                &camera.bind_groups,
+                &camera_bind_group,
             );
 
             // render_mesh_batches(
@@ -313,14 +311,14 @@ impl Renderer {
                 &debug_mesh_batch,
                 &mut render_pass,
                 &self.render_pipelines,
-                &camera.bind_groups,
+                &camera_bind_group,
             );
 
             render_ui_batch(
                 &ui_mesh_batch,
                 &mut render_pass,
                 &self.render_pipelines,
-                &camera.bind_groups,
+                &ui_camera_bind_group,
             );
         }
 

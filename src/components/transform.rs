@@ -139,55 +139,13 @@ impl From<&Transform> for GlobalTransform {
     }
 }
 
-/// Describe the position of an entity. If the entity has a parent, the position is relative
-/// to its parent position.
-///
-/// * To place or move an entity, you should set its [`Transform`].
-/// * To get the global transform of an entity, you should get its [`GlobalTransform`].
-/// * To be displayed, an entity must have both a [`Transform`] and a [`GlobalTransform`].
-///   * You may use the [`TransformBundle`](crate::TransformBundle) to guarantee this.
-///
-/// ## [`Transform`] and [`GlobalTransform`]
-///
-/// [`Transform`] is the position of an entity relative to its parent position, or the reference
-/// frame if it doesn't have a [`Parent`](bevy_hierarchy::Parent).
-///
-/// [`GlobalTransform`] is the position of an entity relative to the reference frame.
-///
-/// [`GlobalTransform`] is updated from [`Transform`] in the system
-/// [`transform_propagate_system`](crate::transform_propagate_system).
-///
-/// This system runs in stage [`CoreStage::PostUpdate`](crate::CoreStage::PostUpdate). If you
-/// update the [`Transform`] of an entity in this stage or after, you will notice a 1 frame lag
-/// before the [`GlobalTransform`] is updated.
-///
-/// # Examples
-///
-/// - [`transform`]
-/// - [`global_vs_local_translation`]
-///
-/// [`global_vs_local_translation`]: https://github.com/bevyengine/bevy/blob/latest/examples/transforms/global_vs_local_translation.rs
-/// [`transform`]: https://github.com/bevyengine/bevy/blob/latest/examples/transforms/transform.rs
 #[derive(Debug, PartialEq, Clone, Copy)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct Transform {
     /// Position of the entity. In 2d, the last value of the `Vec3` is used for z-ordering.
-    ///
-    /// See the [`translations`] example for usage.
-    ///
-    /// [`translations`]: https://github.com/bevyengine/bevy/blob/latest/examples/transforms/translation.rs
     pub translation: Vec3,
     /// Rotation of the entity.
-    ///
-    /// See the [`3d_rotation`] example for usage.
-    ///
-    /// [`3d_rotation`]: https://github.com/bevyengine/bevy/blob/latest/examples/transforms/3d_rotation.rs
     pub rotation: Quat,
     /// Scale of the entity.
-    ///
-    /// See the [`scale`] example for usage.
-    ///
-    /// [`scale`]: https://github.com/bevyengine/bevy/blob/latest/examples/transforms/scale.rs
     pub scale: Vec3,
 }
 
@@ -371,14 +329,6 @@ impl Transform {
     }
 
     /// Rotates this [`Transform`] by the given rotation.
-    ///
-    /// If this [`Transform`] has a parent, the `rotation` is relative to the rotation of the parent.
-    ///
-    /// # Examples
-    ///
-    /// - [`3d_rotation`]
-    ///
-    /// [`3d_rotation`]: https://github.com/bevyengine/bevy/blob/latest/examples/transforms/3d_rotation.rs
     #[inline]
     pub fn rotate(&mut self, rotation: Quat) {
         self.rotation = rotation * self.rotation;

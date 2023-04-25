@@ -24,8 +24,8 @@ impl Nimbus for GameExample {
 
     fn update(&mut self, engine: &mut Engine, delta: f32) {
         let mut move_direction = Vec2::default();
-        for key in engine.input.keyboards_inputs.get_pressed() {
-            use sdl2::keyboard::Keycode::*;
+        for key in engine.input.inputs.get_pressed() {
+            use nimbus::input::Input::*;
             match key {
                 W => move_direction += Vec2::Y,
                 S => move_direction -= Vec2::Y,
@@ -35,23 +35,12 @@ impl Nimbus for GameExample {
             }
         }
 
-        move_direction += Vec2::new(
-            engine.input.get_axis(sdl2::controller::Axis::LeftX),
-            engine.input.get_axis(sdl2::controller::Axis::LeftY),
-        );
+        use nimbus::input::Axis::*;
+        move_direction += Vec2::new(engine.input.get_axis(LeftX), engine.input.get_axis(LeftY));
 
         if move_direction != Vec2::default() {
             self.player.1.translation += move_direction.normalize().extend(0.) * delta * 150f32;
         }
-
-        // egui::SidePanel::right("egui_demo_panel")
-        //     .resizable(false)
-        //     .default_width(150.)
-        //     .show(&engine.egui_ctx(), |ui| {
-        //         ui.vertical_centered(|ui| {
-        //             ui.heading("✒ egui demos");
-        //         });
-        //     });
     }
 
     fn render(&mut self, renderer: &mut nimbus::renderer::Renderer, delta: f32) {

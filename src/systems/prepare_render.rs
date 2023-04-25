@@ -1,10 +1,11 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use glam::Vec3;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    arena::ArenaId,
+    arena::{Arena, ArenaId},
+    camera::Camera,
     renderer::{
         debug_mesh::PreparedDebugMeshItem,
         mesh2d::{Mesh2d, PreparedRenderItem},
@@ -133,6 +134,11 @@ pub fn prepare_ui_for_batching(ui: &mut Ui, renderer: &mut Renderer) -> Vec<Prep
         }
     }
 
+    let pipeline = renderer
+        .render_pipelines
+        .get(&PipelineType::Mesh2d)
+        .unwrap();
+
     batches
         .iter()
         .map(|batch| {
@@ -157,11 +163,6 @@ pub fn prepare_ui_for_batching(ui: &mut Ui, renderer: &mut Renderer) -> Vec<Prep
             let texture = renderer.textures.get(batch.texture_id).unwrap();
 
             let sampler = &renderer.get_texture_sampler(texture.sampler);
-
-            let pipeline = renderer
-                .render_pipelines
-                .get(&PipelineType::Mesh2d)
-                .unwrap();
 
             let texture_bind_group =
                 renderer

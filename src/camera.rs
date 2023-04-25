@@ -1,58 +1,76 @@
-use std::{collections::HashMap, sync::Arc};
-
-use glam::{Mat4, UVec2, Vec2};
-
 use crate::{
     arena::ArenaId,
-    components::{ray::Raycast3D, transform::Transform},
+    components::{
+        ray::Raycast3D,
+        transform::{self, Transform},
+    },
 };
+use glam::{Mat4, UVec2, Vec2};
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
-pub enum CameraBindGroupType {
+#[derive(Debug, Clone)]
+pub struct Camera {
+    render_target: RenderTargetInfo, // by default it will be the window
+    pub projection: Projection,
+    pub transform: Transform,
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Default)]
+pub enum ProjectionType {
+    #[default]
     Orthographic,
     OrthographicUI,
     Perspective,
 }
 
-#[derive(Debug, Clone)]
-pub struct Camera {
-    pub target: RenderTarget,
-    pub target_info: RenderTargetInfo,
-    pub(crate) bind_groups: HashMap<CameraBindGroupType, Arc<wgpu::BindGroup>>,
-    pub orthographic_projection: OrthographicProjection,
-    pub transform: Transform,
-}
-
 impl Camera {
-    pub fn new_with_far(far: f32, physical_size: UVec2, scale: f32) -> Self {
+    pub fn new_ui(physical_size: UVec2, scale: f32) -> Self {
+        let mut projection = Projection::OrthographicUI();
+
+        projection.update(physical_size.x as _, physical_size.y as _);
+        let transform = Transform::from_xyz(0.0, 0.0, projection.far - 0.1);
+
+        Camera {
+            projection,
+            transform,
+            render_target: RenderTargetInfo {
+                physical_size,
+                scale_factor: scale,
+            },
+        }
+    }
+
+    pub fn new_with_far(far: f32, physical_size: UVec2, zoom: i32) -> Self {
         // TODO: Make this support any projection and not have a weird hack for UI maybe?
-        let mut projection = OrthographicProjection {
+        let mut projection = Projection {
             far,
-            scale,
+            zoom,
             ..Default::default()
         };
 
         projection.update(physical_size.x as _, physical_size.y as _);
 
         Camera {
-            orthographic_projection: projection,
+            projection,
             transform: Transform::from_xyz(0.0, 0.0, far - 0.1),
-            target_info: RenderTargetInfo {
+            render_target: RenderTargetInfo {
                 physical_size,
-                scale_factor: scale,
+                scale_factor: zoom as f32,
             },
-            ..Default::default()
         }
+    }
+
+    pub fn resize(&mut self, physical_size: UVec2) {
+        self.projection
+            .update(physical_size.x as _, physical_size.y as _);
+        self.render_target.physical_size = physical_size;
     }
 }
 
 impl Default for Camera {
     fn default() -> Self {
         Self {
-            target_info: RenderTargetInfo::default(),
-            target: Default::default(),
-            bind_groups: HashMap::default(),
-            orthographic_projection: OrthographicProjection::default(),
+            render_target: RenderTargetInfo::default(),
+            projection: Projection::default(),
             transform: Transform::from_xyz(0.0, 0.0, 1000. - 0.1),
         }
     }
@@ -89,7 +107,7 @@ impl Default for Camera {
 //     }
 // }
 
-/// The "target" that a [`Camera`] will render to. For example, this could be a [`Window`](bevy_window::Window)
+/// The "target" that a [`Camera`] will render to.
 /// swapchain or an [`Image`].
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum RenderTarget {
@@ -150,6 +168,10 @@ pub enum ScalingMode {
     /// Keep horizontal axis constant; resize vertical with aspect ratio.
     /// The argument is the desired width of the viewport in world units.
     FixedHorizontal(f32),
+    TargetRes {
+        desired_width: i32,
+        desired_height: i32,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -159,7 +181,7 @@ pub enum WindowOrigin {
 }
 
 #[derive(Debug, Clone)]
-pub struct OrthographicProjection {
+pub struct Projection {
     pub left: f32,
     pub right: f32,
     pub bottom: f32,
@@ -168,27 +190,79 @@ pub struct OrthographicProjection {
     pub far: f32,
     pub window_origin: WindowOrigin,
     pub scaling_mode: ScalingMode,
-    pub scale: f32,
+    pub proj_type: ProjectionType,
+    pub zoom: i32,
+
+    /// If present, `zoom` will be automatically updated to always fit
+    /// `desired_width` in the window as best as possible.
+    pub desired_width: Option<i32>,
+
+    /// If present, `zoom` will be automatically updated to always fit
+    /// `desired_height` in the window as best as possible.
+    pub desired_height: Option<i32>,
 }
 
-impl OrthographicProjection {
-    fn get_projection_matrix(&self) -> Mat4 {
-        Mat4::orthographic_rh(
-            self.left / self.scale,
-            self.right / self.scale,
-            self.bottom / self.scale,
-            self.top / self.scale,
-            self.near,
-            self.far,
-        )
+impl Projection {
+    fn Orthographic() -> Self {
+        Self {
+            proj_type: ProjectionType::Orthographic,
+            window_origin: WindowOrigin::TopLeft,
+            ..Default::default()
+        }
     }
 
-    fn get_projection_matrix_ui(logical_size: Vec2) -> Mat4 {
-        Mat4::orthographic_rh(0.0, logical_size.x, logical_size.y, 0.0, 0.0, 1000.)
+    fn OrthographicUI() -> Self {
+        Self {
+            proj_type: ProjectionType::Orthographic,
+            ..Default::default()
+        }
+    }
+
+    fn get_projection_matrix(&self) -> Mat4 {
+        match self.proj_type {
+            ProjectionType::Orthographic => Mat4::orthographic_rh(
+                self.left,
+                self.right,
+                self.bottom,
+                self.top,
+                self.near,
+                self.far,
+            ),
+            ProjectionType::OrthographicUI => {
+                Mat4::orthographic_rh(0.0, self.right, self.bottom, 0.0, 0.0, 1000.)
+            }
+            ProjectionType::Perspective => todo!("Need to implement perspective matrix"),
+        }
     }
 
     fn update(&mut self, width: f32, height: f32) {
         let (viewport_width, viewport_height) = match self.scaling_mode {
+            ScalingMode::TargetRes {
+                desired_width,
+                desired_height,
+            } => {
+                let mut zoom_x = None;
+                if desired_width > 0 {
+                    zoom_x = Some((width as i32) / desired_width);
+                }
+                let mut zoom_y = None;
+                if let Some(desired_height) = self.desired_height {
+                    if desired_height > 0 {
+                        zoom_y = Some((height as i32) / desired_height);
+                    }
+                }
+                match (zoom_x, zoom_y) {
+                    (Some(zoom_x), Some(zoom_y)) => self.zoom = zoom_x.min(zoom_y).max(1),
+                    (Some(zoom_x), None) => self.zoom = zoom_x.max(1),
+                    (None, Some(zoom_y)) => self.zoom = zoom_y.max(1),
+                    (None, None) => (),
+                }
+
+                let actual_width = width / (self.zoom as f32);
+                let actual_height = height / (self.zoom as f32);
+
+                (actual_width, actual_height)
+            }
             ScalingMode::WindowSize => (width, height),
             ScalingMode::AutoMin {
                 min_width,
@@ -233,12 +307,10 @@ impl OrthographicProjection {
                 self.top = half_height;
 
                 if let ScalingMode::WindowSize = self.scaling_mode {
-                    if self.scale == 1.0 {
-                        self.left = self.left.floor();
-                        self.bottom = self.bottom.floor();
-                        self.right = self.right.floor();
-                        self.top = self.top.floor();
-                    }
+                    self.left = self.left.floor();
+                    self.bottom = self.bottom.floor();
+                    self.right = self.right.floor();
+                    self.top = self.top.floor();
                 }
             }
             WindowOrigin::TopLeft => {
@@ -251,9 +323,9 @@ impl OrthographicProjection {
     }
 }
 
-impl Default for OrthographicProjection {
+impl Default for Projection {
     fn default() -> Self {
-        OrthographicProjection {
+        Projection {
             left: -1.0,
             right: 1.0,
             bottom: -1.0,
@@ -262,7 +334,10 @@ impl Default for OrthographicProjection {
             far: 1000.0,
             window_origin: WindowOrigin::Center,
             scaling_mode: ScalingMode::WindowSize,
-            scale: 1.0,
+            zoom: 1,
+            proj_type: Default::default(),
+            desired_height: None,
+            desired_width: None,
         }
     }
 }
@@ -277,18 +352,13 @@ pub struct CameraUniform {
 impl Camera {
     #[inline]
     pub fn projection_matrix(&self) -> Mat4 {
-        self.orthographic_projection.get_projection_matrix()
-    }
-
-    pub fn projection_matrix_ui(&self, logical_window_size: Vec2) -> Mat4 {
-        OrthographicProjection::get_projection_matrix_ui(logical_window_size)
-        // self.orthographic_projection.get_projection_matrix()
+        self.projection.get_projection_matrix()
     }
 
     /// Converts a physical size in this `Camera` to a logical size.
     #[inline]
     pub fn to_logical(&self, physical_size: UVec2) -> Vec2 {
-        physical_size.as_vec2() / self.target_info.scale_factor
+        physical_size.as_vec2() / self.render_target.scale_factor
     }
 
     /// The rendered physical bounds (minimum, maximum) of the camera. If the `viewport` field is
@@ -317,7 +387,7 @@ impl Camera {
     /// [`RenderTarget`], prefer [`Camera::logical_target_size`].
     #[inline]
     pub fn logical_viewport_size(&self) -> Vec2 {
-        self.to_logical(self.target_info.physical_size)
+        self.to_logical(self.render_target.physical_size)
     }
 
     /// The full logical size of this camera's [`RenderTarget`], ignoring custom `viewport` configuration.
@@ -325,7 +395,7 @@ impl Camera {
     /// For logic that requires the size of the actually rendered area, prefer [`Camera::logical_viewport_size`].
     #[inline]
     pub fn logical_target_size(&self) -> Vec2 {
-        self.to_logical(self.target_info.physical_size)
+        self.to_logical(self.render_target.physical_size)
     }
 
     /// The physical size of this camera's viewport. If the `viewport` field is set to [`Some`], this
@@ -334,7 +404,7 @@ impl Camera {
     /// For logic that requires the full physical size of the [`RenderTarget`], prefer [`Camera::physical_target_size`].
     #[inline]
     pub fn physical_viewport_size(&self) -> UVec2 {
-        self.target_info.physical_size
+        self.render_target.physical_size
     }
 
     /// The full physical size of this camera's [`RenderTarget`], ignoring custom `viewport` configuration.
@@ -342,7 +412,7 @@ impl Camera {
     /// For logic that requires the size of the actually rendered area, prefer [`Camera::physical_viewport_size`].
     #[inline]
     pub fn physical_target_size(&self) -> UVec2 {
-        self.target_info.physical_size
+        self.render_target.physical_size
     }
 
     /// Returns a ray originating from the camera, that passes through everything beyond `viewport_position`.
@@ -353,16 +423,12 @@ impl Camera {
     ///
     /// To get the world space coordinates with Normalized Device Coordinates, you should use
     /// [`ndc_to_world`](Self::ndc_to_world).
-    pub fn viewport_to_world(
-        &self,
-        camera_transform: &Transform,
-        viewport_position: Vec2,
-    ) -> Option<Raycast3D> {
+    pub fn viewport_to_world(&self, viewport_position: Vec2) -> Option<Raycast3D> {
         let target_size = self.logical_viewport_size();
         let ndc = viewport_position * 2. / target_size - Vec2::ONE;
         let projection = self.projection_matrix();
 
-        let ndc_to_world = camera_transform.compute_matrix() * projection.inverse();
+        let ndc_to_world = self.transform.compute_matrix() * projection.inverse();
         let world_near_plane = ndc_to_world.project_point3(ndc.extend(1.));
         // Using EPSILON because an ndc with Z = 0 returns NaNs.
         let world_far_plane = ndc_to_world.project_point3(ndc.extend(f32::EPSILON));
