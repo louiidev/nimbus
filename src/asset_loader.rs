@@ -1,17 +1,25 @@
 use asefile::AsepriteFile;
 use image::EncodableLayout;
-
 use std::{
     env,
+    fs::File,
+    future::Future,
+    io::Read,
     path::{Path, PathBuf},
+    pin::Pin,
 };
 
-use crate::{
-    arena::ArenaId,
-    file_system_watcher::{AssetType, FilesystemWatcher},
-    internal_image::InternalImage,
-    Engine,
-};
+/// An owned and dynamically typed Future used when you can't statically type your result or need to add some indirection.
+#[cfg(not(target_arch = "wasm32"))]
+pub type BoxedFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+#[cfg(target_arch = "wasm32")]
+pub type BoxedFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
+
+#[cfg(feature = "hot-reloading")]
+use crate::file_system_watcher::{AssetType, FilesystemWatcher};
+
+use crate::{arena::ArenaId, internal_image::InternalImage, Engine};
 
 #[derive(Default)]
 pub struct AssetPipeline {
@@ -21,11 +29,21 @@ pub struct AssetPipeline {
 }
 
 impl Engine {
+    pub fn load_texture_bytes(&mut self, bytes: &[u8], extension: &str) -> ArenaId {
+        let image = self
+            .asset_pipeline
+            .load_texture_from_bytes(bytes, extension)
+            .unwrap();
+
+        self.renderer.as_mut().unwrap().load_texture(image)
+    }
+
     pub fn load_texture<P: AsRef<Path>>(&mut self, file: P) -> ArenaId {
         let actual_path = get_base_path().join(&file);
-        let image = self.asset_pipeline.load_texture(&actual_path);
+        let image = self.asset_pipeline.load_texture(&actual_path).unwrap();
         let id = self.renderer.as_mut().unwrap().load_texture(image);
 
+        #[cfg(feature = "hot-reloading")]
         self.asset_pipeline
             .watch_file(&actual_path, id, AssetType::Texture);
 
@@ -33,9 +51,10 @@ impl Engine {
     }
 
     pub fn reload_texture(&mut self, absoulte_file: PathBuf, id: ArenaId) {
-        let image = self.asset_pipeline.load_texture(&absoulte_file);
+        let image = self.asset_pipeline.load_texture(&absoulte_file).unwrap();
         self.renderer.as_mut().unwrap().replace_texture(id, image);
     }
+
     #[allow(clippy::collapsible_match)]
     pub fn watch_change(&mut self) {
         #[cfg(feature = "hot-reloading")]
@@ -68,38 +87,91 @@ impl Engine {
 }
 
 impl AssetPipeline {
+    #[cfg(feature = "hot-reloading")]
     pub fn watch_file<P: AsRef<Path>>(&mut self, file: P, id: ArenaId, asset_type: AssetType) {
         #[cfg(feature = "hot-reloading")]
         self.watcher.watch_file(&file, id, asset_type);
     }
+    #[cfg(target_arch = "wasm32")]
+    async fn load_path_async(&self, path: &Path) -> Result<Vec<u8>, String> {
+        use js_sys::Uint8Array;
+        use wasm_bindgen::JsCast;
+        use wasm_bindgen_futures::JsFuture;
+        use web_sys::Response;
+        let path = get_base_path().join(path);
+        let window = web_sys::window().unwrap();
+        let resp_value = JsFuture::from(window.fetch_with_str(path.to_str().unwrap()))
+            .await
+            .unwrap();
+        let resp: Response = resp_value.dyn_into().unwrap();
+        let data = JsFuture::from(resp.array_buffer().unwrap()).await.unwrap();
+        let bytes = Uint8Array::new(&data).to_vec();
+        Ok(bytes)
+    }
 
-    pub fn load_texture(&mut self, file: &PathBuf) -> InternalImage {
-        let extension = file.extension().expect("Missing extension");
-        let bytes = match extension.to_str().unwrap() {
+    #[cfg(target_arch = "wasm32")]
+    fn load_path(&self, path: &Path) -> Result<Vec<u8>, String> {
+        panic!("Not implemented, waiting for async traits")
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn load_path(&self, path: &Path) -> Result<Vec<u8>, String> {
+        let mut bytes = Vec::new();
+        let full_path = get_base_path().join(path);
+        match File::open(full_path) {
+            Ok(mut file) => {
+                file.read_to_end(&mut bytes).unwrap();
+            }
+            Err(e) => {
+                return if e.kind() == std::io::ErrorKind::NotFound {
+                    Err("Error not found".to_string())
+                } else {
+                    Err(e.to_string())
+                }
+            }
+        }
+        Ok(bytes)
+    }
+
+    pub fn load_texture_from_bytes(
+        &mut self,
+        file_bytes: &[u8],
+        extension: &str,
+    ) -> Result<InternalImage, String> {
+        let bytes = match extension {
             "aseprite" => {
-                let ase = AsepriteFile::read_file(&file).unwrap();
+                let ase = AsepriteFile::read(file_bytes).unwrap();
 
                 InternalImage {
                     data: ase.frame(0).image().as_bytes().to_vec(),
                     size: ase.size(),
                 }
             }
-            _ => match image::open(file) {
+            _ => match image::load_from_memory_with_format(file_bytes, image::ImageFormat::Png) {
                 Ok(img) => InternalImage {
                     data: img.as_bytes().to_vec(),
                     size: (img.width() as _, img.height() as _),
                 },
-                Err(e) => {
-                    panic!("{}", e);
-                }
+                Err(e) => return Err(e.to_string()),
             },
         };
-        bytes
+        Ok(bytes)
+    }
+
+    pub fn load_texture(&mut self, path: &Path) -> Result<InternalImage, String> {
+        let extension = path.extension().expect("Missing extension");
+
+        let file_bytes = self.load_path(path)?;
+
+        self.load_texture_from_bytes(&file_bytes, extension.to_str().unwrap())
     }
 }
 
 pub fn get_base_path() -> PathBuf {
-    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+    #[cfg(not(target_arch = "wasm32"))]
+    let root = if let Ok(env_bevy_asset_root) = env::var("BEVY_ASSET_ROOT") {
+        PathBuf::from(env_bevy_asset_root)
+    } else if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
         PathBuf::from(manifest_dir)
     } else {
         env::current_exe()
@@ -109,5 +181,11 @@ pub fn get_base_path() -> PathBuf {
                     .unwrap()
             })
             .unwrap()
-    }
+    };
+
+    #[cfg(not(target_arch = "wasm32"))]
+    return root.join("assets");
+
+    #[cfg(target_arch = "wasm32")]
+    PathBuf::from("assets")
 }

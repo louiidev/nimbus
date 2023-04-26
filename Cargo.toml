@@ -25,24 +25,29 @@ rodio = "0.17.1"
 winit = { version= "0.28.3", optional = true }
 sdl2 = { optional = true, features = ["raw-window-handle"], git = "https://github.com/Rust-SDL2/rust-sdl2", rev = "ffa4eb0" }
 gilrs = { optional = true, version = "0.10.2" }
-
+instant = { version = "0.1" }
 
 [features]
-default = ["hot-reloading", "winit"]
+default = ["sdl"]
 winit=["dep:winit", "dep:gilrs"]
 sdl=["dep:sdl2"]
 hot-reloading=["dep:notify"]
 debug-egui = ["dep:egui_wgpu_backend", "dep:egui_winit_platform", "dep:egui", "dep:egui_inspect"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+rodio = { version = "0.17.1", default-features = false, features = ["vorbis", "flac", "wav", "wasm-bindgen"] }
+image = { version = "0.24.5", default-features = false, features = ["png"] }
 console_error_panic_hook = "0.1.6"
 console_log = "0.2.0"
 log = "0.4.17"
+js-sys = "0.3.61"
 wgpu = { version = "0.15", features = ["webgl"]}
-wasm-bindgen = "0.2"
+wasm-bindgen = "=0.2.84"
 wasm-bindgen-futures = "0.4.30"
-web-sys = { version = "0.3", features = [
+instant = { version = "0.1", features = ["wasm-bindgen"] }
+web-sys = { version = "0.3.53", features = [
     "Document",
     "Window",
     "Element",
+    "Response"
 ]}

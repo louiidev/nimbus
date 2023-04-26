@@ -85,7 +85,7 @@ impl Renderer {
     }
 
     pub async fn new(window: &Window, viewport: UVec2) -> Self {
-        let (instance, surface, adapter) = window.create_surface_adapater().await;
+        let (_instance, surface, adapter) = window.create_surface_adapater().await;
         let surface_caps = surface.get_capabilities(&adapter);
         // Shader code in this tutorial assumes an Srgb surface texture. Using a different
         // one will result all the colors comming out darker. If you want to support non

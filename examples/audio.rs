@@ -7,7 +7,7 @@ pub struct Game {
 
 impl Nimbus for Game {
     fn init(&mut self, engine: &mut Engine) {
-        let id = engine.load_audio("./examples/Windless Slopes.ogg");
+        let id = engine.load_audio("Windless Slopes.ogg");
         engine.audio.play(id);
 
         self.audio_id = id;

@@ -1,10 +1,24 @@
 use glam::Vec2;
 use nimbus::{
-    components::{sprite::Sprite, transform::Transform},
+    components::{sprite::Sprite, text::Text, transform::Transform},
     Engine, Nimbus,
 };
 
 fn main() {
+    run();
+}
+
+
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen(start))]
+fn run() {
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+            console_log::init_with_level(log::Level::Warn).expect("Couldn't initialize logger");
+        }
+    }
+
     let app = Engine::default();
     let game = GameExample::default();
     app.run(game);
@@ -17,7 +31,7 @@ pub struct GameExample {
 
 impl Nimbus for GameExample {
     fn init(&mut self, engine: &mut Engine) {
-        let texture_id = engine.load_texture("cloud.png");
+        let texture_id = engine.load_texture_bytes(include_bytes!("../assets/cloud.png"), "png");
 
         self.player.0.texture_id = texture_id;
     }
@@ -34,6 +48,14 @@ impl Nimbus for GameExample {
                 _ => {}
             }
         }
+
+        engine.ui.text(
+            Text {
+                value: "Nimbus web build".to_string(),
+                ..Default::default()
+            },
+            Vec2::default(),
+        );
 
         use nimbus::input::Axis::*;
         move_direction += Vec2::new(engine.input.get_axis(LeftX), engine.input.get_axis(LeftY));

@@ -3,6 +3,7 @@ pub mod asset_loader;
 pub mod audio;
 pub mod camera;
 pub mod components;
+#[cfg(feature = "hot-reloading")]
 pub mod file_system_watcher;
 pub mod input;
 pub mod internal_image;
@@ -31,7 +32,7 @@ use glam::UVec2;
 use input::InputManager;
 use renderer::{ui::Ui, Renderer};
 use time::Time;
-use window::WindowDescriptor;
+use window::{WindowAbstraction, WindowDescriptor, WindowEngineAbstraction};
 
 pub trait Nimbus {
     fn init(&mut self, _engine: &mut Engine) {}
@@ -67,8 +68,7 @@ impl Engine {
             ..Default::default()
         };
 
-        // let logical_size = LogicalSize::new(width, height);
-        let window_size = window.size();
+        let window_size = window.get_size();
 
         let mut camera = Camera::new_with_far(1000., window_size, 1);
 
@@ -115,7 +115,7 @@ impl Engine {
     }
 
     pub fn run<Game: Nimbus + 'static>(self, game: Game) {
-        pollster::block_on(self.run_event_loop_async(game));
+        self.run_event_loop(game);
     }
 
     pub fn get_render_ctx(&mut self) -> &mut Renderer {

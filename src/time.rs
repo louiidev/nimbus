@@ -1,15 +1,13 @@
-use std::time::Instant;
+use instant::{Duration, Instant, SystemTime};
 
 /// The current time, expressed in milliseconds since the Unix Epoch.
 pub fn now() -> f64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
         .expect("System clock was before 1970.")
         .as_secs_f64()
         * 1000.0
 }
-
-use std::time::Duration;
 
 /// A clock that tracks how much it has advanced (and how much real time has elapsed) since
 /// its previous update and since its creation.

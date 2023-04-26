@@ -24,7 +24,7 @@ pub enum ProjectionType {
 
 impl Camera {
     pub fn new_ui(physical_size: UVec2, scale: f32) -> Self {
-        let mut projection = Projection::OrthographicUI();
+        let mut projection = Projection::orthographic_ui();
 
         projection.update(physical_size.x as _, physical_size.y as _);
         let transform = Transform::from_xyz(0.0, 0.0, projection.far - 0.1);
@@ -203,7 +203,7 @@ pub struct Projection {
 }
 
 impl Projection {
-    fn Orthographic() -> Self {
+    fn orthographic() -> Self {
         Self {
             proj_type: ProjectionType::Orthographic,
             window_origin: WindowOrigin::TopLeft,
@@ -211,7 +211,7 @@ impl Projection {
         }
     }
 
-    fn OrthographicUI() -> Self {
+    fn orthographic_ui() -> Self {
         Self {
             proj_type: ProjectionType::Orthographic,
             ..Default::default()
