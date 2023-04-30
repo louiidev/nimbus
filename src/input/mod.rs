@@ -4,7 +4,7 @@ mod convert_winit_inputs;
 #[cfg(feature = "sdl")]
 mod convert_sdl_inputs;
 
-use crate::{camera::Camera, window::Gamepads};
+use crate::{camera::Camera, window::Gamepads, Engine};
 use glam::{UVec2, Vec2};
 use std::{
     collections::{hash_set::Iter, HashMap, HashSet},
@@ -15,10 +15,16 @@ use std::{
 pub struct InputManager {
     pub screen_mouse_position: Vec2,
     pub mouse_position: Vec2,
-    pub inputs: InputStates,
     // pub key_mappings: HashMap<String, KeyMapping>,
     pub controllers: Gamepads,
     pub axis: HashMap<Axis, f32>,
+
+    /// A collection of every button that is currently being pressed.
+    pub(crate) pressed: HashSet<Input>,
+    /// A collection of every button that has just been pressed.
+    pub(crate) just_pressed: HashSet<Input>,
+    /// A collection of every button that has just been released.
+    pub(crate) just_released: HashSet<Input>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -426,8 +432,8 @@ impl InputManager {
         let InputEvent { value, state } = input.into();
 
         match state {
-            InputState::Pressed => self.inputs.press(value.into()),
-            InputState::Released => self.inputs.release(value.into()),
+            InputState::Pressed => self.press(value.into()),
+            InputState::Released => self.release(value.into()),
         }
     }
 
@@ -452,13 +458,23 @@ impl InputManager {
             self.mouse_position.y = mouse_pos.y;
         }
     }
-
-    pub fn clear(&mut self) {
-        self.inputs.clear();
-    }
-
     pub fn get_axis(&mut self, axis: Axis) -> f32 {
         self.axis.get(&axis).copied().unwrap_or(0.)
+    }
+
+    pub fn press(&mut self, input: Input) {
+        // Returns `true` if the `input` wasn't pressed.
+        if self.pressed.insert(input) {
+            self.just_pressed.insert(input);
+        }
+    }
+
+    /// Registers a release for the given `input`.
+    pub fn release(&mut self, input: Input) {
+        // Returns `true` if the `input` was pressed.
+        if self.pressed.remove(&input) {
+            self.just_released.insert(input);
+        }
     }
 
     // pub fn pressed(&self, mapping_key: impl ToString) -> bool {
@@ -518,75 +534,51 @@ impl InputManager {
     // }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct InputStates {
-    /// A collection of every button that is currently being pressed.
-    pressed: HashSet<Input>,
-    /// A collection of every button that has just been pressed.
-    just_pressed: HashSet<Input>,
-    /// A collection of every button that has just been released.
-    just_released: HashSet<Input>,
-}
-
-impl InputStates {
+impl Engine {
     /// Registers a press for the given `input`.
-    pub fn press(&mut self, input: Input) {
-        // Returns `true` if the `input` wasn't pressed.
-        if self.pressed.insert(input) {
-            self.just_pressed.insert(input);
-        }
-    }
 
     /// Returns `true` if the `input` has been pressed.
     pub fn pressed(&self, input: Input) -> bool {
-        self.pressed.contains(&input)
+        self.input.pressed.contains(&input)
     }
 
     /// Returns `true` if the `input` has just been pressed.
     pub fn just_pressed(&self, input: Input) -> bool {
-        self.just_pressed.contains(&input)
+        self.input.just_pressed.contains(&input)
     }
 
     /// Returns `true` if the `input` has just been released.
     pub fn just_released(&self, input: Input) -> bool {
-        self.just_released.contains(&input)
-    }
-
-    /// Registers a release for the given `input`.
-    pub fn release(&mut self, input: Input) {
-        // Returns `true` if the `input` was pressed.
-        if self.pressed.remove(&input) {
-            self.just_released.insert(input);
-        }
+        self.input.just_released.contains(&input)
     }
 
     /// Clears the `pressed`, `just_pressed` and `just_released` data of the `input`.
     pub fn reset(&mut self, input: Input) {
-        self.pressed.remove(&input);
-        self.just_pressed.remove(&input);
-        self.just_released.remove(&input);
+        self.input.pressed.remove(&input);
+        self.input.just_pressed.remove(&input);
+        self.input.just_released.remove(&input);
     }
 
     /// An iterator visiting every pressed input in arbitrary order.
     pub fn get_pressed(&self) -> Iter<Input> {
-        self.pressed.iter()
+        self.input.pressed.iter()
     }
 
     /// An iterator visiting every just pressed input in arbitrary order.
     pub fn get_just_pressed(&self) -> Iter<Input> {
-        self.just_pressed.iter()
+        self.input.just_pressed.iter()
     }
 
     /// An iterator visiting every just released input in arbitrary order.
     pub fn get_just_released(&self) -> Iter<Input> {
-        self.just_released.iter()
+        self.input.just_released.iter()
     }
 
     /// Clears the `just pressed` and `just released` data for every input.
     ///
     /// See also [`Input::reset_all`] for a full reset.
-    pub fn clear(&mut self) {
-        self.just_pressed.clear();
-        self.just_released.clear();
+    pub fn clear_inputs(&mut self) {
+        self.input.just_pressed.clear();
+        self.input.just_released.clear();
     }
 }

@@ -37,6 +37,15 @@ impl Default for Sprite {
     }
 }
 
+impl From<ArenaId> for Sprite {
+    fn from(texture_id: ArenaId) -> Self {
+        Self {
+            texture_id,
+            ..Default::default()
+        }
+    }
+}
+
 impl Sprite {
     pub fn new(texture_id: ArenaId) -> Self {
         Self {

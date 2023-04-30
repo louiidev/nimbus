@@ -195,8 +195,6 @@ impl Renderer {
             self.surface_config.width = new_size.x;
             self.surface_config.height = new_size.y;
             self.surface.configure(&self.device, &self.surface_config);
-        } else {
-            panic!("Invalid size???");
         }
     }
 

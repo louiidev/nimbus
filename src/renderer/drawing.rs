@@ -65,7 +65,10 @@ impl Renderer {
 
         let mut vertices = Vec::new();
 
-        let texture = self.textures.get(sprite.texture_id).unwrap();
+        let texture = self
+            .textures
+            .get(sprite.texture_id)
+            .expect("Missing texture id");
         let current_image_size = texture.dimensions.as_vec2();
 
         // By default, the size of the quad is the size of the texture

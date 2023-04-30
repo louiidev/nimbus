@@ -38,16 +38,21 @@ impl Engine {
         self.renderer.as_mut().unwrap().load_texture(image)
     }
 
-    pub fn load_texture<P: AsRef<Path>>(&mut self, file: P) -> ArenaId {
-        let actual_path = get_base_path().join(&file);
-        let image = self.asset_pipeline.load_texture(&actual_path).unwrap();
-        let id = self.renderer.as_mut().unwrap().load_texture(image);
+    pub fn load_texture<P: AsRef<Path>>(&mut self, path: P) -> ArenaId {
+        match self.asset_pipeline.load_texture(&path) {
+            Ok(image) => {
+                let id = self.renderer.as_mut().unwrap().load_texture(image);
 
-        #[cfg(feature = "hot-reloading")]
-        self.asset_pipeline
-            .watch_file(&actual_path, id, AssetType::Texture);
+                #[cfg(feature = "hot-reloading")]
+                self.asset_pipeline
+                    .watch_file(&path, id, AssetType::Texture);
 
-        id
+                id
+            }
+            Err(e) => {
+                panic!("{}", e);
+            }
+        }
     }
 
     pub fn reload_texture(&mut self, absoulte_file: PathBuf, id: ArenaId) {
@@ -78,19 +83,20 @@ impl Engine {
         }
     }
 
-    pub fn load_audio<P: AsRef<Path>>(&mut self, file: P) -> ArenaId {
-        let actual_path = get_base_path().join(&file);
-        let file = std::fs::File::open(actual_path).unwrap();
+    pub fn load_audio<P: AsRef<Path>>(&mut self, path: P) -> ArenaId {
+        let byte = self.asset_pipeline.load_path(path.as_ref()).unwrap();
 
-        self.audio.add_file(file)
+        self.audio.add(byte)
     }
 }
 
 impl AssetPipeline {
     #[cfg(feature = "hot-reloading")]
-    pub fn watch_file<P: AsRef<Path>>(&mut self, file: P, id: ArenaId, asset_type: AssetType) {
+    pub fn watch_file<P: AsRef<Path>>(&mut self, path: P, id: ArenaId, asset_type: AssetType) {
+        let full_path = get_base_path().join(path);
+
         #[cfg(feature = "hot-reloading")]
-        self.watcher.watch_file(&file, id, asset_type);
+        self.watcher.watch_file(&full_path, id, asset_type);
     }
     #[cfg(target_arch = "wasm32")]
     async fn load_path_async(&self, path: &Path) -> Result<Vec<u8>, String> {
@@ -111,7 +117,8 @@ impl AssetPipeline {
 
     #[cfg(target_arch = "wasm32")]
     fn load_path(&self, path: &Path) -> Result<Vec<u8>, String> {
-        panic!("Not implemented, waiting for async traits")
+        // panic!("Not implemented, waiting for async traits")
+        todo!()
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -148,20 +155,22 @@ impl AssetPipeline {
                 }
             }
             _ => match image::load_from_memory_with_format(file_bytes, image::ImageFormat::Png) {
-                Ok(img) => InternalImage {
-                    data: img.as_bytes().to_vec(),
-                    size: (img.width() as _, img.height() as _),
-                },
+                Ok(img) => {
+                    let img = img.to_rgba8();
+                    return Ok(InternalImage {
+                        data: img.as_bytes().to_vec(),
+                        size: (img.width() as _, img.height() as _),
+                    });
+                }
                 Err(e) => return Err(e.to_string()),
             },
         };
         Ok(bytes)
     }
 
-    pub fn load_texture(&mut self, path: &Path) -> Result<InternalImage, String> {
-        let extension = path.extension().expect("Missing extension");
-
-        let file_bytes = self.load_path(path)?;
+    pub fn load_texture<P: AsRef<Path>>(&mut self, path: &P) -> Result<InternalImage, String> {
+        let extension = path.as_ref().extension().expect("Missing extension");
+        let file_bytes = self.load_path(path.as_ref())?;
 
         self.load_texture_from_bytes(&file_bytes, extension.to_str().unwrap())
     }

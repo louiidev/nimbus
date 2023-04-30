@@ -75,7 +75,7 @@ impl Texture {
             depth_or_array_layers: 1,
         };
 
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+        let texture_descriptor = wgpu::TextureDescriptor {
             label: None,
             size,
             mip_level_count: 1,
@@ -84,7 +84,10 @@ impl Texture {
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
-        });
+        };
+
+        let format_described = texture_descriptor.format.describe();
+        let texture = device.create_texture(&texture_descriptor);
 
         queue.write_texture(
             wgpu::ImageCopyTexture {
@@ -96,7 +99,7 @@ impl Texture {
             bytes,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(4 * size.width),
+                bytes_per_row: NonZeroU32::new(format_described.block_size as u32 * size.width),
                 rows_per_image: NonZeroU32::new(size.height),
             },
             size,

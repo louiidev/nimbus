@@ -61,12 +61,9 @@ impl Audio {
         }
     }
 
-    pub fn add_file(&mut self, file: File) -> ArenaId {
-        let mut reader = BufReader::new(file);
-        let mut buffer = Vec::new();
-        reader.read_to_end(&mut buffer).unwrap();
+    pub fn add(&mut self, bytes: Vec<u8>) -> ArenaId {
         self.audio_sources.insert(AudioSource {
-            bytes: buffer.into(),
+            bytes: bytes.into(),
             sink: None,
         })
     }

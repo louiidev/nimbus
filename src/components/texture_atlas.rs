@@ -24,30 +24,7 @@ impl TextureAtlas {
     }
 
     pub fn new(texture_id: ArenaId, tile_size: Vec2, columns: usize, rows: usize) -> Self {
-        let mut textures = Vec::new();
-
-        for y in 0..rows {
-            for x in 0..columns {
-                let cell = Vec2::new(x as f32, y as f32);
-                let rect_min = tile_size * cell;
-
-                let sprite = Rect {
-                    min: rect_min,
-                    max: rect_min + tile_size,
-                };
-
-                textures.push(sprite);
-            }
-        }
-
-        let grid_size = Vec2::new(columns as f32, rows as f32);
-
-        TextureAtlas {
-            textures,
-            size: tile_size * grid_size,
-            tile_size,
-            texture_id,
-        }
+        TextureAtlas::new_padding_offset(texture_id, tile_size, columns, rows, None, None)
     }
 
     pub fn new_padding_offset(
@@ -86,6 +63,8 @@ impl TextureAtlas {
         }
 
         let grid_size = Vec2::new(columns as f32, rows as f32);
+
+        dbg!(grid_size, columns, rows);
 
         TextureAtlas {
             texture_id,

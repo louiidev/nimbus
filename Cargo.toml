@@ -28,7 +28,7 @@ gilrs = { optional = true, version = "0.10.2" }
 instant = { version = "0.1" }
 
 [features]
-default = ["sdl"]
+default = ["winit", "hot-reloading"]
 winit=["dep:winit", "dep:gilrs"]
 sdl=["dep:sdl2"]
 hot-reloading=["dep:notify"]

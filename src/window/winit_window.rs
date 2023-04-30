@@ -190,9 +190,16 @@ impl WindowEngineAbstraction for Engine {
                             }
                         }
                         EventType::AxisChanged(gilrs_axis, raw_value, _) => {
+                            let dead_zone = 0.015;
                             let axis: Result<Axis, _> = gilrs_axis.try_into();
                             if let Ok(axis) = axis {
-                                self.input.update_axis(axis, raw_value)
+                                let value = if raw_value.abs() > dead_zone {
+                                    raw_value
+                                } else {
+                                    0.
+                                };
+
+                                self.input.update_axis(axis, value)
                             }
                         }
                         _ => (),

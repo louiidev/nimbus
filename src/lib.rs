@@ -136,7 +136,7 @@ impl Engine {
 
         self.ui.renderer = self.renderer.take();
         game.update(self, self.time.delta_seconds());
-        self.input.clear();
+        self.clear_inputs();
         let mut renderer = self.ui.renderer.take().unwrap();
         game.render(&mut renderer, self.time.delta_seconds());
         renderer.render(
@@ -149,6 +149,15 @@ impl Engine {
         self.renderer = Some(renderer);
         self.time.update();
         self.watch_change();
+    }
+
+    pub fn enable_wasm_logs() {
+        cfg_if::cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {
+                std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+                console_log::init_with_level(log::Level::Warn).expect("Couldn't initialize logger");
+            }
+        }
     }
 
     pub fn get_viewport(&self) -> Vec2 {
