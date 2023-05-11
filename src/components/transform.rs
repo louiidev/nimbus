@@ -1,4 +1,4 @@
-use glam::{Affine3A, Mat3, Mat4, Quat, Vec3};
+use glam::{Affine3A, Mat3, Mat4, Quat, Vec2, Vec3};
 use std::ops::Mul;
 
 /// Update [`GlobalTransform`] component of entities based on entity hierarchy and
@@ -188,6 +188,14 @@ impl Transform {
     pub const fn from_translation(translation: Vec3) -> Self {
         Transform {
             translation,
+            ..Self::IDENTITY
+        }
+    }
+
+    #[inline]
+    pub const fn from_position_2d(position: Vec2) -> Self {
+        Transform {
+            translation: position.extend(0.),
             ..Self::IDENTITY
         }
     }

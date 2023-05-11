@@ -51,7 +51,7 @@ pub struct Engine {
     pub(crate) renderer: Option<Renderer>,
     pub input: InputManager,
     pub window_size: UVec2,
-    pub(crate) time: Time,
+    pub time: Time,
     pub ui: Ui,
     pub(crate) asset_pipeline: AssetPipeline,
     pub audio: Audio,

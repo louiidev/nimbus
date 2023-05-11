@@ -441,25 +441,10 @@ impl InputManager {
         self.axis.insert(axis, value);
     }
 
-    pub(crate) fn update_cursor_position(
-        &mut self,
-        position: (f32, f32),
-        window_size: UVec2,
-        camera: &Camera,
-    ) {
-        let y_position = window_size.y as f32 - position.1;
+    pub(crate) fn update_cursor_position(&mut self, mut mouse_position: Vec2, window_size: UVec2) {
+        mouse_position.y = window_size.y as f32 - mouse_position.y;
 
-        let mouse_pos = camera
-            .viewport_to_world(Vec2::new(position.0, y_position))
-            .map(|ray| ray.origin.truncate());
-
-        if let Some(mouse_pos) = mouse_pos {
-            self.mouse_position.x = mouse_pos.x;
-            self.mouse_position.y = mouse_pos.y;
-        }
-    }
-    pub fn get_axis(&mut self, axis: Axis) -> f32 {
-        self.axis.get(&axis).copied().unwrap_or(0.)
+        self.mouse_position = mouse_position;
     }
 
     pub fn press(&mut self, input: Input) {
@@ -580,5 +565,9 @@ impl Engine {
     pub fn clear_inputs(&mut self) {
         self.input.just_pressed.clear();
         self.input.just_released.clear();
+    }
+
+    pub fn get_axis(&mut self, axis: Axis) -> f32 {
+        self.input.axis.get(&axis).copied().unwrap_or(0.)
     }
 }

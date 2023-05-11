@@ -168,9 +168,8 @@ impl WindowEngineAbstraction for Engine {
 
                     Event::MouseMotion { x, y, .. } => {
                         self.input.update_cursor_position(
-                            (x as f32, y as f32),
+                            Vec2::new(x as f32, y as f32),
                             self.window_size,
-                            &self.camera,
                         );
                     }
 

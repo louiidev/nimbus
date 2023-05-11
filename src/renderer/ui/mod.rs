@@ -135,7 +135,7 @@ impl Ui {
         let renderer = self.renderer.as_mut().unwrap();
         let text_glyphs = self.font_renderer.queue_text(
             &text,
-            container_size,
+            Some(container_size),
             fontdue::layout::CoordinateSystem::PositiveYDown,
             &mut renderer.textures,
             &renderer.device,

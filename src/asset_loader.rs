@@ -88,6 +88,37 @@ impl Engine {
 
         self.audio.add(byte)
     }
+
+    pub fn load_font_as_default<P: AsRef<Path>>(&mut self, path: P) -> ArenaId {
+        let bytes = self.asset_pipeline.load_path(path.as_ref()).unwrap();
+        self.load_font_bytes_as_default(&bytes)
+    }
+
+    pub fn load_font_bytes_as_default(&mut self, bytes: &[u8]) -> ArenaId {
+        let default_id = ArenaId::first();
+        self.renderer
+            .as_mut()
+            .unwrap()
+            .font_renderer
+            .load_font_with_id(&bytes, default_id)
+            .unwrap();
+
+        default_id
+    }
+    pub fn load_font_bytes(&mut self, bytes: &[u8]) -> ArenaId {
+        self.renderer
+            .as_mut()
+            .unwrap()
+            .font_renderer
+            .load_font(&bytes)
+            .unwrap()
+    }
+
+    pub fn load_font<P: AsRef<Path>>(&mut self, path: P) -> ArenaId {
+        let bytes = self.asset_pipeline.load_path(path.as_ref()).unwrap();
+
+        self.load_font_bytes(&bytes)
+    }
 }
 
 impl AssetPipeline {

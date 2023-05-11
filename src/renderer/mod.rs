@@ -227,12 +227,6 @@ impl Renderer {
         *self.textures.get_mut(id).unwrap() = texture;
     }
 
-    pub fn load_font(&mut self, bytes: &[u8]) -> ArenaId {
-        let id = self.font_renderer.load_font(bytes).unwrap();
-
-        id
-    }
-
     pub(crate) fn get_texture_sampler(&self, sampler_type: TextureSampler) -> &Arc<Sampler> {
         self.texture_samplers.get(&sampler_type).unwrap()
     }

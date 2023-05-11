@@ -23,6 +23,15 @@ impl Default for Text {
     }
 }
 
+impl From<&str> for Text {
+    fn from(value: &str) -> Self {
+        Text {
+            value: value.to_string(),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct TextAlignment {
     pub vertical: VerticalAlign,

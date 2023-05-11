@@ -49,6 +49,7 @@ pub trait WindowAbstraction {
     fn get_size(&self) -> UVec2;
     fn get_scale(&self) -> f32;
     fn get_controller(&self) -> Gamepads;
+    fn set_cursor_visible(&self, show: bool);
 }
 
 pub trait WindowEngineAbstraction {

@@ -1,5 +1,5 @@
 use gilrs::{Filter, Gilrs};
-use glam::UVec2;
+use glam::{UVec2, Vec2};
 use winit::window::Window as ExternalWindow;
 use winit::{dpi::LogicalSize, event_loop::EventLoop, window::WindowBuilder};
 
@@ -82,6 +82,10 @@ impl WindowAbstraction for Window {
             gilrs: Some(Gilrs::new().unwrap()),
         }
     }
+
+    fn set_cursor_visible(&self, show: bool) {
+        self.window.set_cursor_visible(show);
+    }
 }
 
 impl WindowEngineAbstraction for Engine {
@@ -145,9 +149,8 @@ impl WindowEngineAbstraction for Engine {
                     }
                     WindowEvent::CursorMoved { position, .. } => {
                         self.input.update_cursor_position(
-                            (position.x as f32, position.y as f32),
+                            Vec2::new(position.x as f32, position.y as f32),
                             self.window_size,
-                            &self.camera,
                         );
                     }
                     _ => {}

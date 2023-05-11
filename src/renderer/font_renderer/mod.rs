@@ -49,7 +49,7 @@ impl FontRenderer {
     pub fn queue_text(
         &mut self,
         text: &Text,
-        container_size: Vec2,
+        container_size: Option<Vec2>,
         y_axis_orientation: CoordinateSystem,
         textures: &mut Arena<Texture>,
         device: &Device,
@@ -85,8 +85,8 @@ impl FontRenderer {
         layout.reset(&LayoutSettings {
             x: 0.0,
             y: 0.0,
-            max_width: Some(container_size.x),
-            max_height: Some(container_size.y),
+            max_width: container_size.map(|size| size.x),
+            max_height: container_size.map(|size| size.y),
             horizontal_align: text.alignment.horizontal,
             vertical_align: text.alignment.vertical,
             ..Default::default()
@@ -132,6 +132,18 @@ impl FontRenderer {
         }
 
         update_texture_data
+    }
+
+    pub fn load_font_with_id(&mut self, font_data: &[u8], id: ArenaId) -> FontResult<()> {
+        let font = fontdue::Font::from_bytes(font_data, fontdue::FontSettings::default())?;
+
+        let font_to_replace = self
+            .fonts
+            .get_mut(id)
+            .expect("Trying to replace font id that doesnt exist");
+        *font_to_replace = Font { font };
+
+        Ok(())
     }
 
     pub fn load_font(&mut self, font_data: &[u8]) -> FontResult<ArenaId> {

@@ -64,8 +64,6 @@ impl TextureAtlas {
 
         let grid_size = Vec2::new(columns as f32, rows as f32);
 
-        dbg!(grid_size, columns, rows);
-
         TextureAtlas {
             texture_id,
             textures,
