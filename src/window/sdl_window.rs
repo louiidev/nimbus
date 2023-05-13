@@ -56,6 +56,10 @@ impl WindowAbstraction for Window {
         1f32
     }
 
+    fn set_cursor_visible(&self, show: bool) {
+        self.sdl_context.mouse().show_cursor(show);
+    }
+
     fn get_controller(&self) -> Gamepads {
         #[cfg(feature = "sdl")]
         {

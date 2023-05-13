@@ -24,7 +24,7 @@ impl Nimbus for GameExample {
 
     fn update(&mut self, engine: &mut Engine, delta: f32) {
         let mut move_direction = Vec2::default();
-        for key in engine.input.inputs.get_pressed() {
+        for key in engine.get_pressed() {
             use nimbus::input::Input::*;
             match key {
                 W => move_direction += Vec2::Y,
@@ -36,7 +36,7 @@ impl Nimbus for GameExample {
         }
 
         use nimbus::input::Axis::*;
-        move_direction += Vec2::new(engine.input.get_axis(LeftX), engine.input.get_axis(LeftY));
+        move_direction += Vec2::new(engine.get_axis(LeftX), engine.get_axis(LeftY));
 
         if move_direction != Vec2::default() {
             self.player.1.translation += move_direction.normalize().extend(0.) * delta * 150f32;
