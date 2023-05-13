@@ -26,6 +26,7 @@ winit = { version= "0.28.3", optional = true }
 sdl2 = { optional = true, features = ["raw-window-handle"], git = "https://github.com/Rust-SDL2/rust-sdl2", rev = "ffa4eb0" }
 gilrs = { optional = true, version = "0.10.2" }
 instant = { version = "0.1" }
+rand = "0.8.5"
 
 [features]
 default = ["winit", "hot-reloading"]
