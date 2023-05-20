@@ -236,7 +236,6 @@ impl Renderer {
         camera: &Camera,
         ui: &mut Ui,
         #[cfg(feature = "debug-egui")] egui_platform: &mut Platform,
-        window: &Window,
     ) {
         let output = self
             .surface

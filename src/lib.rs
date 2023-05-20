@@ -144,7 +144,6 @@ impl Engine {
             &mut self.ui,
             #[cfg(feature = "debug-egui")]
             &mut self.egui_platform,
-            &self.window,
         );
         self.renderer = Some(renderer);
         self.time.update();

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use crate::time::Time;
+use crate::{arena::ArenaId, time::Time};
 
 use super::{
     rect::Rect,
@@ -19,21 +19,24 @@ pub struct AnimatedSprite<S> {
     pub states: HashMap<S, AnimatedState<S>>,
 }
 
-impl<S: PartialEq + Eq + Hash + Clone + Copy + Debug> AnimatedSprite<S> {
+impl<S: PartialEq + Eq + Hash + Clone + Copy + Debug + Default> AnimatedSprite<S> {
     pub fn new(
-        sprite: Sprite,
         atlas: TextureAtlas,
         states: HashMap<S, AnimatedState<S>>,
-        current_state: S,
+        seconds_per_frame: f32,
     ) -> Self {
-        Self {
-            sprite,
+        let mut init = Self {
+            sprite: atlas.texture_id.into(),
             atlas,
-            timer: Timer::default(),
-            current_state,
+            timer: Timer::from_seconds(seconds_per_frame, timer::TimerMode::Repeating),
+            current_state: S::default(),
             current_frame_index: 0,
             states,
-        }
+        };
+
+        init.set_sprite_texture_rect(init.states[&init.current_state].clone());
+
+        init
     }
 
     pub fn init(&mut self, seconds_per_frame: f32, states: HashMap<S, AnimatedState<S>>) {
@@ -63,12 +66,17 @@ impl<S: PartialEq + Eq + Hash + Clone + Copy + Debug> AnimatedSprite<S> {
             if self.timer.just_finished() {
                 let last_frame_index = animation_state.animation_frames_indices
                     [animation_state.animation_frames_indices.len() - 1];
+                dbg!(
+                    "FRAME INDICIES = {}",
+                    animation_state.animation_frames_indices.len()
+                );
+                dbg!("LAST FRME {}", last_frame_index);
                 if self.current_frame_index == last_frame_index {
+                    self.current_frame_index = 0;
                     if let Some(next_animation_state) = animation_state.on_end_animation_state {
+                        dbg!("on_end_animation_state");
                         self.set_animation_state(next_animation_state);
                         animation_state = self.states.get(&next_animation_state).unwrap().clone();
-                    } else {
-                        self.current_frame_index = 0;
                     }
                 } else {
                     self.current_frame_index += 1;

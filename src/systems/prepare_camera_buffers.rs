@@ -26,11 +26,12 @@ pub fn create_camera_bind_group(
         view_proj: view_projection.to_cols_array_2d(),
     };
 
-    let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("View Buffer"),
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-        contents: bytemuck::cast_slice(&[camera_uniform]),
-    });
+    let camera_buffer: wgpu::Buffer =
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("View Buffer"),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+            contents: bytemuck::cast_slice(&[camera_uniform]),
+        });
 
     let camera_2d_bind_group_layout = &pipeline
         .bind_group_layouts
