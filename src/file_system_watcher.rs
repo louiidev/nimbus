@@ -6,7 +6,7 @@ use std::{
 
 use notify::{Config, Error, Event, RecommendedWatcher, Watcher};
 
-use crate::arena::ArenaId;
+use render_buddy::arena::{ArenaId, WeakArenaId};
 
 #[derive(Debug)]
 pub enum AssetType {
@@ -15,17 +15,17 @@ pub enum AssetType {
     Scene,
 }
 
-pub struct FileChange {
-    pub path: PathBuf,
-    pub asset_id: ArenaId,
-    pub asset_type: AssetType,
-}
+// pub struct FileChange {
+//     pub path: PathBuf,
+//     pub asset_id: ArenaId,
+//     pub asset_type: AssetType,
+// }
 
 pub struct FilesystemWatcher {
     pub watcher: RecommendedWatcher,
     pub receiver: Receiver<Result<Event, Error>>,
     pub path_map: HashMap<PathBuf, HashSet<PathBuf>>,
-    pub asset_map: HashMap<PathBuf, (ArenaId, AssetType)>,
+    pub asset_map: HashMap<PathBuf, (WeakArenaId, AssetType)>,
 }
 
 impl Default for FilesystemWatcher {
@@ -51,7 +51,7 @@ impl FilesystemWatcher {
     pub(crate) fn watch_file<P: AsRef<Path>>(
         &mut self,
         path: &P,
-        id: ArenaId,
+        id: WeakArenaId,
         asset_type: AssetType,
     ) {
         self.asset_map

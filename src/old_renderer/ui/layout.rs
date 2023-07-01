@@ -1,4 +1,4 @@
-use crate::{components::color::Color, renderer::mesh2d::Mesh2d};
+use crate::{components::color::Color, old_renderer::mesh2d::Mesh2d};
 use glam::Vec2;
 
 #[derive(Debug)]

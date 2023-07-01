@@ -1,11 +1,6 @@
-use crate::{
-    arena::ArenaId,
-    components::{
-        ray::Raycast3D,
-        transform::{self, Transform},
-    },
-};
+use crate::components::ray::Raycast3D;
 use glam::{Mat4, UVec2, Vec2};
+use render_buddy::transform::Transform;
 
 #[derive(Debug, Clone)]
 pub struct Camera {
@@ -114,8 +109,6 @@ pub enum RenderTarget {
     /// Window to which the camera's view is rendered.
     #[default]
     Window,
-    /// Image to which the camera's view is rendered.
-    Image(ArenaId),
 }
 
 impl RenderTarget {
@@ -340,13 +333,6 @@ impl Default for Projection {
             desired_width: None,
         }
     }
-}
-
-#[repr(C)]
-// This is so we can store this in a buffer
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct CameraUniform {
-    pub view_proj: [[f32; 4]; 4],
 }
 
 impl Camera {

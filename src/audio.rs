@@ -1,12 +1,8 @@
-use std::{
-    fs::File,
-    io::{BufReader, Cursor, Read},
-    sync::Arc,
-};
+use std::{io::Cursor, sync::Arc};
 
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 
-use crate::arena::{Arena, ArenaId};
+use render_buddy::arena::{Arena, ArenaId};
 
 pub struct Audio {
     audio_sources: Arena<AudioSource>,
@@ -27,8 +23,8 @@ impl Default for Audio {
 }
 
 impl Audio {
-    pub fn play(&mut self, audio_id: ArenaId) {
-        let mut audio = self.audio_sources.get_mut(audio_id).unwrap();
+    pub fn play(&mut self, handle: ArenaId<AudioSource>) {
+        let mut audio = self.audio_sources.get_mut(handle).unwrap();
 
         let sink = if let Some(sink) = audio.sink.take() {
             sink
@@ -43,8 +39,8 @@ impl Audio {
         audio.sink = Some(sink);
     }
 
-    pub fn paused(&mut self, audio_id: ArenaId) -> bool {
-        let audio = self.audio_sources.get_mut(audio_id).unwrap();
+    pub fn paused(&mut self, handle: ArenaId<AudioSource>) -> bool {
+        let audio = self.audio_sources.get_mut(handle).unwrap();
 
         if let Some(sink) = &audio.sink {
             sink.is_paused()
@@ -53,15 +49,15 @@ impl Audio {
         }
     }
 
-    pub fn pause(&mut self, audio_id: ArenaId) {
-        let audio = self.audio_sources.get_mut(audio_id).unwrap();
+    pub fn pause(&mut self, handle: ArenaId<AudioSource>) {
+        let audio = self.audio_sources.get_mut(handle).unwrap();
 
         if let Some(sink) = &audio.sink {
             sink.pause();
         }
     }
 
-    pub fn add(&mut self, bytes: Vec<u8>) -> ArenaId {
+    pub fn add(&mut self, bytes: Vec<u8>) -> ArenaId<AudioSource> {
         self.audio_sources.insert(AudioSource {
             bytes: bytes.into(),
             sink: None,

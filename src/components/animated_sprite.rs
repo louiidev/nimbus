@@ -1,15 +1,10 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use super::timer::{self, Timer};
+use crate::{asset_loader::FrameData, time::Time};
+use glam::Vec2;
+use render_buddy::{arena::ArenaId, sprite::Sprite, texture::Texture, texture_atlas::TextureAtlas};
+use std::{collections::HashMap, fmt::Debug, hash::Hash, str::FromStr};
 
-use crate::{arena::ArenaId, time::Time};
-
-use super::{
-    rect::Rect,
-    sprite::Sprite,
-    texture_atlas::TextureAtlas,
-    timer::{self, Timer},
-};
-
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct AnimatedSprite<S> {
     pub sprite: Sprite,
     pub atlas: TextureAtlas,
@@ -19,14 +14,63 @@ pub struct AnimatedSprite<S> {
     pub states: HashMap<S, AnimatedState<S>>,
 }
 
-impl<S: PartialEq + Eq + Hash + Clone + Copy + Debug + Default> AnimatedSprite<S> {
+impl<S: PartialEq + Eq + Hash + Clone + Copy + Debug + Default + FromStr> AnimatedSprite<S> {
+    pub fn aseprite(frames: Vec<FrameData>, texture: ArenaId<Texture>) -> Self {
+        let first_frame = &frames[0];
+
+        let sprite = Sprite::new(texture);
+
+        let atlas = TextureAtlas::new(
+            texture,
+            Vec2::new(
+                first_frame.source_size.w as f32,
+                first_frame.source_size.h as f32,
+            ),
+            frames.len(),
+            1,
+        );
+
+        let mut states: HashMap<S, AnimatedState<S>> = HashMap::new();
+
+        for (index, frame) in frames.iter().enumerate() {
+            if let Ok(state_key) = S::from_str(&frame.filename) {
+                if states.contains_key(&state_key) {
+                    let anim_frames = states.get_mut(&state_key).unwrap();
+                    anim_frames.animation_frames_indices.push(index);
+                } else {
+                    states.insert(
+                        state_key,
+                        AnimatedState {
+                            on_end_animation_state: None,
+                            animation_frames_indices: vec![index],
+                        },
+                    );
+                }
+            } else {
+                panic!(
+                    "Cant turn filename to enum state, filename: {}",
+                    frame.filename
+                );
+            }
+        }
+
+        Self {
+            sprite,
+            atlas,
+            timer: Timer::from_seconds(first_frame.duration, timer::TimerMode::Repeating),
+            current_state: S::default(),
+            current_frame_index: 0,
+            states,
+        }
+    }
+
     pub fn new(
         atlas: TextureAtlas,
         states: HashMap<S, AnimatedState<S>>,
         seconds_per_frame: f32,
     ) -> Self {
         let mut init = Self {
-            sprite: atlas.texture_id.into(),
+            sprite: Sprite::new(atlas.texture_handle),
             atlas,
             timer: Timer::from_seconds(seconds_per_frame, timer::TimerMode::Repeating),
             current_state: S::default(),
@@ -66,11 +110,7 @@ impl<S: PartialEq + Eq + Hash + Clone + Copy + Debug + Default> AnimatedSprite<S
             if self.timer.just_finished() {
                 let last_frame_index = animation_state.animation_frames_indices
                     [animation_state.animation_frames_indices.len() - 1];
-                dbg!(
-                    "FRAME INDICIES = {}",
-                    animation_state.animation_frames_indices.len()
-                );
-                dbg!("LAST FRME {}", last_frame_index);
+
                 if self.current_frame_index == last_frame_index {
                     self.current_frame_index = 0;
                     if let Some(next_animation_state) = animation_state.on_end_animation_state {

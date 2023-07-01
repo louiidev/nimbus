@@ -106,7 +106,7 @@ impl WindowEngineAbstraction for Engine {
             let current_window_id = self.window.window.id();
             *control_flow = ControlFlow::Wait;
 
-            #[cfg(feature = "debug-egui")]
+            #[cfg(feature = "egui")]
             self.egui_platform.handle_event(&event);
 
             match event {

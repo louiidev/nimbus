@@ -1,6 +1,7 @@
+use egui_inspect::EguiInspect;
 use glam::Vec2;
-use nimbus::{Engine, Nimbus, Transform};
-use render_buddy::sprite::Sprite;
+use nimbus::{egui, Engine, Nimbus, Sprite, Transform};
+use render_buddy::egui_inspect;
 
 fn main() {
     let app = Engine::default();
@@ -8,9 +9,18 @@ fn main() {
     app.run(game);
 }
 
+#[derive(Debug, Default, EguiInspect)]
+pub struct Test {
+    #[inspect(hide)]
+    b: bool,
+    #[inspect(min = 12.0, max = 53.0)]
+    c: f32,
+}
+
 #[derive(Debug, Default)]
 pub struct GameExample {
     player: (Sprite, Transform),
+    test: Test,
 }
 
 impl Nimbus for GameExample {
@@ -39,6 +49,14 @@ impl Nimbus for GameExample {
         if move_direction != Vec2::default() {
             self.player.1.position += move_direction.normalize().extend(0.) * delta * 150f32;
         }
+
+        let ctx = engine.egui_ctx();
+
+        nimbus::egui::Window::new("test")
+            .default_width(320.0)
+            .show(&ctx, |ui| {
+                self.test.inspect_mut("Test App", ui);
+            });
     }
 
     fn render(&mut self, renderer: &mut nimbus::renderer::Renderer, _delta: f32) {

@@ -1,0 +1,155 @@
+{
+    "frames": [
+        {
+            "filename": "Idle",
+            "frame": {
+                "x": 0,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "sourceSize": {
+                "w": 32,
+                "h": 32
+            },
+            "duration": 100
+        },
+        {
+            "filename": "Idle",
+            "frame": {
+                "x": 32,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "sourceSize": {
+                "w": 32,
+                "h": 32
+            },
+            "duration": 100
+        },
+        {
+            "filename": "Idle",
+            "frame": {
+                "x": 64,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "sourceSize": {
+                "w": 32,
+                "h": 32
+            },
+            "duration": 100
+        },
+        {
+            "filename": "Idle",
+            "frame": {
+                "x": 96,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "sourceSize": {
+                "w": 32,
+                "h": 32
+            },
+            "duration": 100
+        },
+        {
+            "filename": "Idle",
+            "frame": {
+                "x": 128,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "sourceSize": {
+                "w": 32,
+                "h": 32
+            },
+            "duration": 100
+        },
+        {
+            "filename": "Idle",
+            "frame": {
+                "x": 160,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 32,
+                "h": 32
+            },
+            "sourceSize": {
+                "w": 32,
+                "h": 32
+            },
+            "duration": 100
+        }
+    ],
+    "meta": {
+        "app": "http://www.aseprite.org/",
+        "version": "1.2.40-x64",
+        "image": "hitter.png",
+        "format": "RGBA8888",
+        "size": {
+            "w": 192,
+            "h": 32
+        },
+        "scale": "1",
+        "frameTags": [
+            {
+                "name": "Tag",
+                "from": 0,
+                "to": 5,
+                "direction": "forward"
+            }
+        ]
+    }
+}

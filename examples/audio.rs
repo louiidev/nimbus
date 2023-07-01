@@ -1,30 +1,31 @@
-use nimbus::{arena::ArenaId, Engine, Nimbus};
+use nimbus::{audio::AudioSource, renderer::Renderer, Engine, Nimbus};
+use render_buddy::arena::ArenaId;
 
 #[derive(Default)]
 pub struct Game {
-    audio_id: ArenaId,
+    audio: ArenaId<AudioSource>,
 }
 
 impl Nimbus for Game {
     fn init(&mut self, engine: &mut Engine) {
-        let id = engine.load_audio("Windless Slopes.ogg");
-        engine.audio.play(id);
+        let handle = engine.load_audio("Windless Slopes.ogg");
+        engine.audio.play(handle);
 
-        self.audio_id = id;
+        self.audio = handle;
     }
 
     fn update(&mut self, engine: &mut Engine, _delta: f32) {
         use nimbus::input::Input::*;
         if engine.just_pressed(Space) {
-            if engine.audio.paused(self.audio_id) {
-                engine.audio.play(self.audio_id);
+            if engine.audio.paused(self.audio) {
+                engine.audio.play(self.audio);
             } else {
-                engine.audio.pause(self.audio_id);
+                engine.audio.pause(self.audio);
             }
         }
     }
 
-    fn render(&mut self, _renderer: &mut nimbus::renderer::Renderer, _delta: f32) {}
+    fn render(&mut self, _renderer: &mut Renderer, _delta: f32) {}
 }
 
 fn main() {
