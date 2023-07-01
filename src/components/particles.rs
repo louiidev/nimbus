@@ -1,8 +1,7 @@
 use glam::Vec3;
+use render_buddy::sprite::Sprite;
 
 use crate::renderer::Renderer;
-
-use super::sprite::Sprite;
 
 pub struct Particle {
     position: Vec3,

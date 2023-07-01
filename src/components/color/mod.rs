@@ -2,6 +2,7 @@ mod colorspace;
 
 pub use colorspace::*;
 use glam::{Vec3, Vec4};
+use render_buddy::wgpu;
 use std::ops::{Add, AddAssign, Mul, MulAssign};
 
 // Stolen with modifications from bevy: https://github.com/bevyengine/bevy/tree/main/crates/bevy_render/src/color

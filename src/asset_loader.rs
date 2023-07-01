@@ -1,5 +1,12 @@
 use asefile::AsepriteFile;
+
+use glam::Vec2;
 use image::EncodableLayout;
+use render_buddy::{
+    arena::ArenaId,
+    fonts::Font,
+    texture::{Image, Texture},
+};
 use std::{
     env,
     fs::File,
@@ -8,6 +15,43 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
 };
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Frame {
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FrameData {
+    pub filename: String,
+    rotated: bool,
+    pub duration: f32,
+    pub frame: Frame,
+    #[serde(rename(deserialize = "sourceSize"))]
+    pub source_size: Size,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Size {
+    pub w: i32,
+    pub h: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Meta {
+    size: Size,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AsepriteJsonOutput {
+    pub frames: Vec<FrameData>,
+    pub meta: Meta,
+}
 
 /// An owned and dynamically typed Future used when you can't statically type your result or need to add some indirection.
 #[cfg(not(target_arch = "wasm32"))]
@@ -19,7 +63,7 @@ pub type BoxedFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 #[cfg(feature = "hot-reloading")]
 use crate::file_system_watcher::{AssetType, FilesystemWatcher};
 
-use crate::{arena::ArenaId, internal_image::InternalImage, Engine};
+use crate::{audio::AudioSource, Engine};
 
 #[derive(Default)]
 pub struct AssetPipeline {
@@ -29,23 +73,50 @@ pub struct AssetPipeline {
 }
 
 impl Engine {
-    pub fn load_texture_bytes(&mut self, bytes: &[u8], extension: &str) -> ArenaId {
+    pub fn load_texture_bytes(&mut self, bytes: &[u8], extension: &str) -> ArenaId<Texture> {
         let image = self
             .asset_pipeline
             .load_texture_from_bytes(bytes, extension)
             .unwrap();
 
-        self.renderer.as_mut().unwrap().load_texture(image)
+        self.renderer.render_buddy.add_texture(image)
     }
 
-    pub fn load_texture<P: AsRef<Path>>(&mut self, path: P) -> ArenaId {
+    pub fn load_file<P: AsRef<Path>>(&mut self, path: P) -> Result<Vec<u8>, String> {
+        self.asset_pipeline.load_path(path.as_ref())
+    }
+
+    pub fn load_aseprite_data_files<P: AsRef<Path>>(
+        &mut self,
+        json_path: P,
+        image_path: P,
+    ) -> (Vec<FrameData>, ArenaId<Texture>) {
+        let json = self.asset_pipeline.load_path(json_path.as_ref()).unwrap();
+
+        let json_slice = json.as_slice();
+
+        let aseprite_output: Result<AsepriteJsonOutput, serde_json::Error> =
+            serde_json::from_slice(json_slice);
+        let aseprite_json = aseprite_output.unwrap();
+
+        debug_assert_eq!(
+            aseprite_json.meta.size.h, aseprite_json.frames[0].source_size.h,
+            "We assume that it will be flat when doing the texture atlas"
+        );
+
+        let texture = self.load_texture(image_path);
+
+        (aseprite_json.frames, texture)
+    }
+
+    pub fn load_texture<P: AsRef<Path>>(&mut self, path: P) -> ArenaId<Texture> {
         match self.asset_pipeline.load_texture(&path) {
             Ok(image) => {
-                let id = self.renderer.as_mut().unwrap().load_texture(image);
+                let id = self.renderer.render_buddy.add_texture(image);
 
                 #[cfg(feature = "hot-reloading")]
                 self.asset_pipeline
-                    .watch_file(&path, id, AssetType::Texture);
+                    .watch_file(&path, id.into(), AssetType::Texture);
 
                 id
             }
@@ -55,9 +126,9 @@ impl Engine {
         }
     }
 
-    pub fn reload_texture(&mut self, absoulte_file: PathBuf, id: ArenaId) {
+    pub fn reload_texture(&mut self, absoulte_file: PathBuf, handle: ArenaId<Texture>) {
         let image = self.asset_pipeline.load_texture(&absoulte_file).unwrap();
-        self.renderer.as_mut().unwrap().replace_texture(id, image);
+        self.renderer.render_buddy.replace_image(handle, image);
     }
 
     #[allow(clippy::collapsible_match)]
@@ -71,7 +142,11 @@ impl Engine {
 
                     match self.asset_pipeline.watcher.asset_map.get(pathbuf) {
                         Some((id, asset_type)) => match asset_type {
-                            AssetType::Texture => self.reload_texture(pathbuf.to_owned(), *id),
+                            AssetType::Texture => {
+                                let id = *id;
+                                let id = id.into();
+                                self.reload_texture(pathbuf.to_owned(), id)
+                            }
                             _ => {}
                         },
                         None => {
@@ -83,38 +158,28 @@ impl Engine {
         }
     }
 
-    pub fn load_audio<P: AsRef<Path>>(&mut self, path: P) -> ArenaId {
+    pub fn load_audio<P: AsRef<Path>>(&mut self, path: P) -> ArenaId<AudioSource> {
         let byte = self.asset_pipeline.load_path(path.as_ref()).unwrap();
 
         self.audio.add(byte)
     }
 
-    pub fn load_font_as_default<P: AsRef<Path>>(&mut self, path: P) -> ArenaId {
+    pub fn load_font_as_default<P: AsRef<Path>>(&mut self, path: P) -> ArenaId<Font> {
         let bytes = self.asset_pipeline.load_path(path.as_ref()).unwrap();
         self.load_font_bytes_as_default(&bytes)
     }
 
-    pub fn load_font_bytes_as_default(&mut self, bytes: &[u8]) -> ArenaId {
-        let default_id = ArenaId::first();
+    pub fn load_font_bytes_as_default(&mut self, bytes: &[u8]) -> ArenaId<Font> {
         self.renderer
-            .as_mut()
-            .unwrap()
-            .font_renderer
-            .load_font_with_id(&bytes, default_id)
-            .unwrap();
-
-        default_id
-    }
-    pub fn load_font_bytes(&mut self, bytes: &[u8]) -> ArenaId {
-        self.renderer
-            .as_mut()
-            .unwrap()
-            .font_renderer
-            .load_font(&bytes)
+            .render_buddy
+            .add_font_as_default(bytes)
             .unwrap()
     }
+    pub fn load_font_bytes(&mut self, bytes: &[u8]) -> ArenaId<Font> {
+        self.renderer.render_buddy.add_font(bytes).unwrap()
+    }
 
-    pub fn load_font<P: AsRef<Path>>(&mut self, path: P) -> ArenaId {
+    pub fn load_font<P: AsRef<Path>>(&mut self, path: P) -> ArenaId<Font> {
         let bytes = self.asset_pipeline.load_path(path.as_ref()).unwrap();
 
         self.load_font_bytes(&bytes)
@@ -123,11 +188,16 @@ impl Engine {
 
 impl AssetPipeline {
     #[cfg(feature = "hot-reloading")]
-    pub fn watch_file<P: AsRef<Path>>(&mut self, path: P, id: ArenaId, asset_type: AssetType) {
+    pub fn watch_file<P: AsRef<Path>, T>(
+        &mut self,
+        path: P,
+        id: ArenaId<T>,
+        asset_type: AssetType,
+    ) {
         let full_path = get_base_path().join(path);
 
         #[cfg(feature = "hot-reloading")]
-        self.watcher.watch_file(&full_path, id, asset_type);
+        self.watcher.watch_file(&full_path, id.into(), asset_type);
     }
     #[cfg(target_arch = "wasm32")]
     async fn load_path_async(&self, path: &Path) -> Result<Vec<u8>, String> {
@@ -175,31 +245,33 @@ impl AssetPipeline {
         &mut self,
         file_bytes: &[u8],
         extension: &str,
-    ) -> Result<InternalImage, String> {
-        let bytes = match extension {
+    ) -> Result<Image, String> {
+        let image = match extension {
             "aseprite" => {
                 let ase = AsepriteFile::read(file_bytes).unwrap();
 
-                InternalImage {
+                Image {
                     data: ase.frame(0).image().as_bytes().to_vec(),
-                    size: ase.size(),
+                    dimensions: (ase.size().0 as u32, ase.size().1 as u32),
+                    ..Default::default()
                 }
             }
             _ => match image::load_from_memory_with_format(file_bytes, image::ImageFormat::Png) {
                 Ok(img) => {
                     let img = img.to_rgba8();
-                    return Ok(InternalImage {
+                    return Ok(Image {
                         data: img.as_bytes().to_vec(),
-                        size: (img.width() as _, img.height() as _),
+                        dimensions: (img.width() as _, img.height() as _),
+                        ..Default::default()
                     });
                 }
                 Err(e) => return Err(e.to_string()),
             },
         };
-        Ok(bytes)
+        Ok(image)
     }
 
-    pub fn load_texture<P: AsRef<Path>>(&mut self, path: &P) -> Result<InternalImage, String> {
+    pub fn load_texture<P: AsRef<Path>>(&mut self, path: &P) -> Result<Image, String> {
         let extension = path.as_ref().extension().expect("Missing extension");
         let file_bytes = self.load_path(path.as_ref())?;
 

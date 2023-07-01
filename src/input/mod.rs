@@ -13,7 +13,6 @@ use std::{
 
 #[derive(Default)]
 pub struct InputManager {
-    pub screen_mouse_position: Vec2,
     pub mouse_position: Vec2,
     // pub key_mappings: HashMap<String, KeyMapping>,
     pub controllers: Gamepads,

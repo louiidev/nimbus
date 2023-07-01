@@ -56,33 +56,12 @@ pub trait WindowEngineAbstraction {
     fn run_event_loop<Game: Nimbus + 'static>(self, game: Game);
 }
 
-impl Window {
-    pub(crate) async fn create_surface_adapater(
-        &self,
-    ) -> (wgpu::Instance, wgpu::Surface, wgpu::Adapter) {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            dx12_shader_compiler: Default::default(),
-        });
-        let surface = unsafe { instance.create_surface(&self.window).unwrap() };
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .unwrap();
-
-        (instance, surface, adapter)
-    }
-}
-
 impl Engine {
     pub fn window_resized(&mut self, window_size: UVec2) {
         self.window_size = window_size;
-        self.renderer.as_mut().unwrap().resize(window_size);
-        self.ui.resize(window_size.as_vec2());
-        self.camera.resize(window_size);
+        self.renderer
+            .render_buddy
+            .resize((window_size.x, window_size.y));
+        // self.ui.resize(window_size.as_vec2());
     }
 }

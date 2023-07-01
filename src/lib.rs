@@ -1,36 +1,42 @@
-pub mod arena;
 pub mod asset_loader;
 pub mod audio;
-pub mod camera;
 pub mod components;
 #[cfg(feature = "hot-reloading")]
 pub mod file_system_watcher;
 pub mod input;
 pub mod internal_image;
 pub mod renderer;
-pub mod systems;
 pub mod time;
 pub mod utils;
 pub mod window;
 
-#[cfg(feature = "debug-egui")]
-use ::egui::FontDefinitions;
 use asset_loader::AssetPipeline;
 use audio::Audio;
-#[cfg(feature = "debug-egui")]
+use components::color::Color;
+#[cfg(feature = "egui")]
 use egui_winit_platform::{Platform, PlatformDescriptor};
 pub use glam as math;
-use math::Vec2;
 
-#[cfg(feature = "debug-egui")]
-pub use egui;
-#[cfg(feature = "debug-egui")]
-pub use egui_inspect;
+pub use render_buddy::arena::*;
 
-use camera::Camera;
+pub use render_buddy::camera;
+use render_buddy::camera::Camera;
+pub use render_buddy::egui;
+pub use render_buddy::egui_inspect;
+use render_buddy::egui_inspect::EguiInspect;
+pub use render_buddy::rect::*;
+pub use render_buddy::sprite::*;
+pub use render_buddy::text::*;
+pub use render_buddy::texture::*;
+pub use render_buddy::texture_atlas::*;
+pub use render_buddy::transform::*;
+
 use glam::UVec2;
 use input::InputManager;
-use renderer::{ui::Ui, Renderer};
+// use old_renderer::{ui::Ui, Renderer};
+use render_buddy::RenderBuddy;
+pub use render_buddy::SortingAxis;
+use renderer::Renderer;
 use time::Time;
 use window::{WindowAbstraction, WindowDescriptor, WindowEngineAbstraction};
 
@@ -43,20 +49,37 @@ pub trait Nimbus {
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::{camera::ScalingMode, window::Window};
+use crate::window::Window;
+
+pub struct EditorState {
+    paused: bool,
+    delta_time_multiplier: f32,
+    pub inspectable: Vec<Box<dyn FnMut(&mut egui::Ui)>>,
+}
+
+impl Default for EditorState {
+    fn default() -> Self {
+        EditorState {
+            paused: false,
+            delta_time_multiplier: 1f32,
+            inspectable: Vec::default(),
+        }
+    }
+}
 
 pub struct Engine {
     pub camera: Camera,
     window: Window,
-    pub(crate) renderer: Option<Renderer>,
+    pub renderer: Renderer,
     pub input: InputManager,
     pub window_size: UVec2,
     pub time: Time,
-    pub ui: Ui,
+    // pub ui: Ui,
     pub(crate) asset_pipeline: AssetPipeline,
     pub audio: Audio,
-    #[cfg(feature = "debug-egui")]
+    #[cfg(feature = "egui")]
     pub egui_platform: Platform,
+    pub editor_state: EditorState,
 }
 
 impl Engine {
@@ -70,46 +93,44 @@ impl Engine {
 
         let window_size = window.get_size();
 
-        let mut camera = Camera::new_with_far(1000., window_size, 1);
+        let mut camera = Camera::orthographic();
 
-        if let Some(size) = window_descriptor.render_resolution {
-            camera.projection.scaling_mode = ScalingMode::AutoMax {
-                max_width: size.x as f32,
-                max_height: size.y as f32,
-            };
-            camera.resize(window_size);
-        }
+        camera.set_orthographic_perspective(
+            camera::CameraOrigin::Center,
+            window_descriptor.render_resolution.map(|v| v.as_vec2()),
+        );
 
-        let renderer = Some(pollster::block_on(Renderer::new(
-            &window,
-            UVec2::new(window_size.x, window_size.y),
-        )));
+        let render_buddy = pollster::block_on(RenderBuddy::new(
+            &window.window,
+            (window_size.x, window_size.y),
+        ))
+        .unwrap();
 
-        #[cfg(feature = "debug-egui")]
+        #[cfg(feature = "egui")]
         let egui_platform = Platform::new(PlatformDescriptor {
-            physical_width: width as u32,
-            physical_height: height as u32,
+            physical_width: window_size.x as u32,
+            physical_height: window_size.y as u32,
             scale_factor: 1.,
-            font_definitions: FontDefinitions::default(),
-            style: Default::default(),
+            ..Default::default()
         });
 
         Self {
             camera,
             window,
-            renderer,
+            renderer: Renderer { render_buddy },
             input,
             window_size,
             time: Time::default(),
-            ui: Ui::new(window_size.as_vec2()),
+            // ui: Ui::new(window_size.as_vec2()),
             asset_pipeline: AssetPipeline::default(),
             audio: Audio::default(),
-            #[cfg(feature = "debug-egui")]
+            #[cfg(feature = "egui")]
             egui_platform,
+            editor_state: EditorState::default(),
         }
     }
 
-    #[cfg(feature = "debug-egui")]
+    #[cfg(feature = "egui")]
     pub fn egui_ctx(&mut self) -> egui::Context {
         self.egui_platform.context()
     }
@@ -118,34 +139,55 @@ impl Engine {
         self.run_event_loop(game);
     }
 
-    pub fn get_render_ctx(&mut self) -> &mut Renderer {
-        if let Some(renderer) = self.renderer.as_mut() {
-            renderer
-        } else {
-            self.ui.renderer.as_mut().unwrap()
-        }
-    }
-
     pub fn update<Game: Nimbus + 'static>(&mut self, game: &mut Game) {
-        #[cfg(feature = "debug-egui")]
+        #[cfg(feature = "egui")]
         {
             self.egui_platform
                 .update_time(self.time.elapsed().as_secs_f64());
             self.egui_platform.begin_frame();
         }
 
-        self.ui.renderer = self.renderer.take();
-        game.update(self, self.time.delta_seconds());
+        #[cfg(all(debug_assertions, feature = "egui"))]
+        {
+            egui::Window::new("Editor")
+                .default_width(320.)
+                .show(&self.egui_ctx(), |ui| {
+                    ui.checkbox(&mut self.editor_state.paused, "Pause Game");
+                    ui.add(
+                        egui::Slider::new(&mut self.editor_state.delta_time_multiplier, 0.0..=2.0)
+                            .text("Delta time multiplier"),
+                    );
+                    self.camera.inspect_mut("test", ui);
+                });
+        }
+
+        let delta = self.time.delta_seconds() * self.editor_state.delta_time_multiplier;
+
+        if !self.editor_state.paused {
+            game.update(self, delta);
+        }
         self.clear_inputs();
-        let mut renderer = self.ui.renderer.take().unwrap();
-        game.render(&mut renderer, self.time.delta_seconds());
-        renderer.render(
+
+        #[cfg(feature = "egui")]
+        let full_output = self.egui_platform.end_frame(Some(&self.window.window));
+        #[cfg(feature = "egui")]
+        let paint_jobs = self.egui_platform.context().tessellate(full_output.shapes);
+
+        let mut ctx = self.renderer.render_buddy.begin();
+        game.render(&mut self.renderer, delta);
+        self.renderer.render_buddy.render(
+            &mut ctx,
+            Some(Color::hex("#6b6ab3").unwrap().as_rgba_linear().into()),
             &self.camera,
-            &mut self.ui,
-            #[cfg(feature = "debug-egui")]
-            &mut self.egui_platform,
+            false,
         );
-        self.renderer = Some(renderer);
+        self.renderer
+            .render_buddy
+            .render_egui(&mut ctx, &full_output.textures_delta, &paint_jobs);
+        self.renderer.render_buddy.end_frame(ctx);
+        self.renderer
+            .render_buddy
+            .end_egui(full_output.textures_delta);
         self.time.update();
         self.watch_change();
     }
@@ -159,8 +201,8 @@ impl Engine {
         }
     }
 
-    pub fn get_viewport(&self) -> Vec2 {
-        self.renderer.as_ref().unwrap().get_viewport()
+    pub fn get_viewport(&self) -> (u32, u32) {
+        self.renderer.render_buddy.get_viewport_size()
     }
 }
 

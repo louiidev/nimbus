@@ -1,6 +1,5 @@
 use glam::{Vec2, Vec3};
-
-use super::rect::Rect;
+use render_buddy::rect::Rect;
 
 pub struct Raycast3D {
     pub origin: Vec3,

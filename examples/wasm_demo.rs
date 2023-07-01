@@ -1,8 +1,6 @@
 use glam::Vec2;
-use nimbus::{
-    components::{sprite::Sprite, text::Text, transform::Transform},
-    Engine, Nimbus,
-};
+
+use nimbus::{Engine, Nimbus, Sprite, Transform};
 
 fn main() {
     run();
@@ -29,9 +27,9 @@ pub struct GameExample {
 
 impl Nimbus for GameExample {
     fn init(&mut self, engine: &mut Engine) {
-        let texture_id = engine.load_texture_bytes(include_bytes!("../assets/cloud.png"), "png");
+        let handle = engine.load_texture_bytes(include_bytes!("../assets/cloud.png"), "png");
 
-        self.player.0.texture_id = texture_id;
+        self.player.0 = Sprite::new(handle);
     }
 
     fn update(&mut self, engine: &mut Engine, delta: f32) {
@@ -47,23 +45,23 @@ impl Nimbus for GameExample {
             }
         }
 
-        engine.ui.text(
-            Text {
-                value: "Nimbus web build".to_string(),
-                ..Default::default()
-            },
-            Vec2::default(),
-        );
+        // engine.ui.text(
+        //     Text {
+        //         value: "Nimbus web build".to_string(),
+        //         ..Default::default()
+        //     },
+        //     Vec2::default(),
+        // );
 
         use nimbus::input::Axis::*;
         move_direction += Vec2::new(engine.get_axis(LeftX), engine.get_axis(LeftY));
 
         if move_direction != Vec2::default() {
-            self.player.1.translation += move_direction.normalize().extend(0.) * delta * 150f32;
+            self.player.1.position += move_direction.normalize().extend(0.) * delta * 150f32;
         }
     }
 
     fn render(&mut self, renderer: &mut nimbus::renderer::Renderer, delta: f32) {
-        renderer.draw_sprite(&self.player.0, &self.player.1)
+        renderer.draw_sprite(self.player.0, self.player.1)
     }
 }

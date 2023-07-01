@@ -51,20 +51,6 @@ impl Font {
             format: TextureFormat::Rgba8UnormSrgb,
         };
 
-        // let image = Image::new(
-        //     Extent3d {
-        //         width: metrics.width as _,
-        //         height: metrics.height as _,
-        //         depth_or_array_layers: 1,
-        //     },
-        //     TextureDimension::D2,
-        //     bitmap
-        //         .iter()
-        //         .flat_map(|a| vec![255, 255, 255, (*a)])
-        //         .collect::<Vec<u8>>(),
-        //     TextureFormat::Rgba8UnormSrgb,
-        // );
-
         (metrics, glyph_image)
     }
 }
