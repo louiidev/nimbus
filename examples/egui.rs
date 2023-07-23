@@ -1,7 +1,6 @@
 use egui_inspect::EguiInspect;
 use glam::Vec2;
-use nimbus::{egui, Engine, Nimbus, Sprite, Transform};
-use render_buddy::egui_inspect;
+use nimbus::{egui, sprite::Sprite, transform::Transform, Engine, Nimbus};
 
 fn main() {
     let app = Engine::default();
@@ -60,6 +59,6 @@ impl Nimbus for GameExample {
     }
 
     fn render(&mut self, renderer: &mut nimbus::renderer::Renderer, _delta: f32) {
-        renderer.draw_sprite(self.player.0, self.player.1)
+        renderer.draw_sprite(&self.player.0, self.player.1)
     }
 }

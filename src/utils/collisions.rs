@@ -1,5 +1,5 @@
+use crate::renderer::rect::Rect;
 use glam::Vec2;
-use render_buddy::rect::Rect;
 
 use crate::components::line::Line2D;
 

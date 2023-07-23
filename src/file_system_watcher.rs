@@ -6,7 +6,7 @@ use std::{
 
 use notify::{Config, Error, Event, RecommendedWatcher, Watcher};
 
-use render_buddy::arena::{ArenaId, WeakArenaId};
+use crate::arena::WeakArenaId;
 
 #[derive(Debug)]
 pub enum AssetType {

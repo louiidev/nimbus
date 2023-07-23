@@ -1,5 +1,4 @@
-use nimbus::{audio::AudioSource, renderer::Renderer, Engine, Nimbus};
-use render_buddy::arena::ArenaId;
+use nimbus::{arena::ArenaId, audio::AudioSource, renderer::Renderer, Engine, Nimbus};
 
 #[derive(Default)]
 pub struct Game {

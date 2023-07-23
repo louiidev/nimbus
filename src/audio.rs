@@ -2,7 +2,7 @@ use std::{io::Cursor, sync::Arc};
 
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 
-use render_buddy::arena::{Arena, ArenaId};
+use crate::arena::{Arena, ArenaId};
 
 pub struct Audio {
     audio_sources: Arena<AudioSource>,

@@ -1,3 +1,4 @@
+pub mod arena;
 pub mod asset_loader;
 pub mod audio;
 pub mod components;
@@ -10,33 +11,27 @@ pub mod time;
 pub mod utils;
 pub mod window;
 
+pub use crate::arena::*;
+pub use crate::rect::*;
+pub use crate::renderer::texture::*;
+pub use crate::sprite::*;
+pub use crate::text::*;
+pub use crate::transform::*;
 use asset_loader::AssetPipeline;
 use audio::Audio;
 use components::color::Color;
 #[cfg(feature = "egui")]
+pub use egui;
+use egui_inspect::EguiInspect;
+#[cfg(feature = "egui")]
 use egui_winit_platform::{Platform, PlatformDescriptor};
 pub use glam as math;
-
-pub use render_buddy::arena::*;
-
-pub use render_buddy::camera;
-use render_buddy::camera::Camera;
-pub use render_buddy::egui;
-pub use render_buddy::egui_inspect;
-use render_buddy::egui_inspect::EguiInspect;
-pub use render_buddy::rect::*;
-pub use render_buddy::sprite::*;
-pub use render_buddy::text::*;
-pub use render_buddy::texture::*;
-pub use render_buddy::texture_atlas::*;
-pub use render_buddy::transform::*;
+pub use renderer::*;
 
 use glam::UVec2;
 use input::InputManager;
 // use old_renderer::{ui::Ui, Renderer};
-use render_buddy::RenderBuddy;
-pub use render_buddy::SortingAxis;
-use renderer::Renderer;
+use renderer::{camera::Camera, Renderer};
 use time::Time;
 use window::{WindowAbstraction, WindowDescriptor, WindowEngineAbstraction};
 
@@ -100,7 +95,7 @@ impl Engine {
             window_descriptor.render_resolution.map(|v| v.as_vec2()),
         );
 
-        let render_buddy = pollster::block_on(RenderBuddy::new(
+        let renderer = pollster::block_on(Renderer::new(
             &window.window,
             (window_size.x, window_size.y),
         ))
@@ -117,7 +112,7 @@ impl Engine {
         Self {
             camera,
             window,
-            renderer: Renderer { render_buddy },
+            renderer,
             input,
             window_size,
             time: Time::default(),
@@ -152,6 +147,9 @@ impl Engine {
             egui::Window::new("Editor")
                 .default_width(320.)
                 .show(&self.egui_ctx(), |ui| {
+                    let delta_seconds = self.time.raw_delta_seconds_f64();
+                    ui.label(format!("Frame time: {}", (delta_seconds * 1000.0) as i32));
+                    ui.label(format!("FPS: {}", (1. / delta_seconds) as i32));
                     ui.checkbox(&mut self.editor_state.paused, "Pause Game");
                     ui.add(
                         egui::Slider::new(&mut self.editor_state.delta_time_multiplier, 0.0..=2.0)
@@ -173,21 +171,18 @@ impl Engine {
         #[cfg(feature = "egui")]
         let paint_jobs = self.egui_platform.context().tessellate(full_output.shapes);
 
-        let mut ctx = self.renderer.render_buddy.begin();
+        let mut ctx = self.renderer.begin();
         game.render(&mut self.renderer, delta);
-        self.renderer.render_buddy.render(
+        self.renderer.render(
             &mut ctx,
             Some(Color::hex("#6b6ab3").unwrap().as_rgba_linear().into()),
             &self.camera,
-            false,
         );
+
         self.renderer
-            .render_buddy
             .render_egui(&mut ctx, &full_output.textures_delta, &paint_jobs);
-        self.renderer.render_buddy.end_frame(ctx);
-        self.renderer
-            .render_buddy
-            .end_egui(full_output.textures_delta);
+        self.renderer.end_frame(ctx);
+        self.renderer.end_egui(full_output.textures_delta);
         self.time.update();
         self.watch_change();
     }
@@ -202,7 +197,7 @@ impl Engine {
     }
 
     pub fn get_viewport(&self) -> (u32, u32) {
-        self.renderer.render_buddy.get_viewport_size()
+        self.renderer.get_viewport_size()
     }
 }
 

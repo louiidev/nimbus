@@ -1,6 +1,6 @@
 use glam::Vec2;
 
-use nimbus::{Engine, Nimbus, Sprite, Transform};
+use nimbus::{sprite::Sprite, transform::Transform, Engine, Nimbus};
 
 fn main() {
     run();
@@ -62,6 +62,6 @@ impl Nimbus for GameExample {
     }
 
     fn render(&mut self, renderer: &mut nimbus::renderer::Renderer, delta: f32) {
-        renderer.draw_sprite(self.player.0, self.player.1)
+        renderer.draw_sprite(&self.player.0, self.player.1)
     }
 }

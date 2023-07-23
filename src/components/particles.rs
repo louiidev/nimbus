@@ -1,5 +1,5 @@
+use crate::renderer::sprite::Sprite;
 use glam::Vec3;
-use render_buddy::sprite::Sprite;
 
 use crate::renderer::Renderer;
 

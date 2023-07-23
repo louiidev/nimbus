@@ -1,6 +1,6 @@
 use glam::Vec2;
 use nimbus::{
-    components::color::Color, utils::collisions::rect_rect_collision, Engine, Nimbus, Rect,
+    components::color::Color, rect::Rect, utils::collisions::rect_rect_collision, Engine, Nimbus,
 };
 
 fn main() {
@@ -41,7 +41,7 @@ impl Nimbus for GameExample {
         } else {
             Color::GREEN
         };
-        renderer.draw_line_rect(self.mouse_rect, color);
-        renderer.draw_line_rect(self.rect, Color::BLUE);
+        renderer.draw_line_rect(&self.mouse_rect, &color);
+        renderer.draw_line_rect(&self.rect, &Color::BLUE);
     }
 }

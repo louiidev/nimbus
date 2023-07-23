@@ -1,6 +1,6 @@
 use glam::Vec3;
-use nimbus::{components::color::Color, Engine, Nimbus, Transform};
-use render_buddy::text::Text;
+use nimbus::text::Text;
+use nimbus::{components::color::Color, transform::Transform, Engine, Nimbus};
 
 #[derive(Default)]
 pub struct Game {
@@ -14,11 +14,11 @@ impl Nimbus for Game {
 
     fn render(&mut self, renderer: &mut nimbus::renderer::Renderer, _delta: f32) {
         renderer.draw_text(
-            Text::new("Hello world", 40.).with_color(Color::GREEN.into()),
+            &Text::new("Hello world", 40.).with_color(Color::GREEN.into()),
             self.text_transform,
         );
 
-        renderer.draw_text_basic(Text::new("Testing", 32.), Vec3::new(150., 150., 0.));
+        renderer.draw_text_basic(&Text::new("Testing", 32.), Vec3::new(150., 150., 0.));
     }
 }
 

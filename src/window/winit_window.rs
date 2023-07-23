@@ -1,5 +1,6 @@
 use gilrs::{Filter, Gilrs};
 use glam::{UVec2, Vec2};
+use winit::event::DeviceEvent;
 use winit::window::Window as ExternalWindow;
 use winit::{dpi::LogicalSize, event_loop::EventLoop, window::WindowBuilder};
 
@@ -110,6 +111,12 @@ impl WindowEngineAbstraction for Engine {
             self.egui_platform.handle_event(&event);
 
             match event {
+                Event::DeviceEvent {
+                    event: DeviceEvent::MouseMotion{ delta, },
+                    .. // We're not using device_id currently
+                } => {
+                    self.input.mouse_motion = Vec2::new(delta.0 as f32, delta.1 as f32);
+                }
                 Event::WindowEvent {
                     ref event,
                     window_id,

@@ -1,10 +1,11 @@
 use glam::Vec2;
 use nimbus::{
     components::{color::Color, line::Line2D},
+    rect::Rect,
+    sprite::Sprite,
     utils::collisions::{line_line_collision, line_rectangle_collision},
-    Engine, Nimbus, Rect, Transform,
+    Engine, Nimbus,
 };
-use render_buddy::sprite::Sprite;
 
 fn main() {
     let app = Engine::default();
@@ -38,14 +39,14 @@ impl Nimbus for GameExample {
 
     fn render(&mut self, renderer: &mut nimbus::renderer::Renderer, _delta: f32) {
         if let Some(collision) = line_rectangle_collision(self.mouse_line, self.rect) {
-            renderer.draw_line(self.mouse_line, Color::RED);
+            renderer.draw_line(&self.mouse_line, &Color::RED);
             renderer.draw_line_rect(
-                Rect::from_center_size(collision, Vec2::splat(5.)),
-                Color::RED,
+                &Rect::from_center_size(collision, Vec2::splat(5.)),
+                &Color::RED,
             )
         } else {
-            renderer.draw_line(self.mouse_line, Color::GREEN);
+            renderer.draw_line(&self.mouse_line, &Color::GREEN);
         }
-        renderer.draw_line_rect(self.rect, Color::BLUE);
+        renderer.draw_line_rect(&self.rect, &Color::BLUE);
     }
 }

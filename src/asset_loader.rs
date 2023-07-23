@@ -1,12 +1,18 @@
 use asefile::AsepriteFile;
+use glam::{Vec2, Vec3, Vec4};
+use tobj::LoadOptions;
 
-use glam::Vec2;
-use image::EncodableLayout;
-use render_buddy::{
-    arena::ArenaId,
+use crate::arena::ArenaId;
+use crate::components::color::Color;
+use crate::material::Material;
+use crate::mesh::{AttributeValue, Mesh, MeshAttribute, MeshBuilder, Vertex};
+use crate::model::Model;
+use crate::renderer::{
     fonts::Font,
     texture::{Image, Texture},
 };
+use image::EncodableLayout;
+use std::io::Cursor;
 use std::{
     env,
     fs::File,
@@ -79,7 +85,7 @@ impl Engine {
             .load_texture_from_bytes(bytes, extension)
             .unwrap();
 
-        self.renderer.render_buddy.add_texture(image)
+        self.renderer.add_texture(image)
     }
 
     pub fn load_file<P: AsRef<Path>>(&mut self, path: P) -> Result<Vec<u8>, String> {
@@ -112,7 +118,7 @@ impl Engine {
     pub fn load_texture<P: AsRef<Path>>(&mut self, path: P) -> ArenaId<Texture> {
         match self.asset_pipeline.load_texture(&path) {
             Ok(image) => {
-                let id = self.renderer.render_buddy.add_texture(image);
+                let id = self.renderer.add_texture(image);
 
                 #[cfg(feature = "hot-reloading")]
                 self.asset_pipeline
@@ -128,7 +134,7 @@ impl Engine {
 
     pub fn reload_texture(&mut self, absoulte_file: PathBuf, handle: ArenaId<Texture>) {
         let image = self.asset_pipeline.load_texture(&absoulte_file).unwrap();
-        self.renderer.render_buddy.replace_image(handle, image);
+        self.renderer.replace_image(handle, image);
     }
 
     #[allow(clippy::collapsible_match)]
@@ -170,19 +176,94 @@ impl Engine {
     }
 
     pub fn load_font_bytes_as_default(&mut self, bytes: &[u8]) -> ArenaId<Font> {
-        self.renderer
-            .render_buddy
-            .add_font_as_default(bytes)
-            .unwrap()
+        self.renderer.add_font_as_default(bytes).unwrap()
     }
     pub fn load_font_bytes(&mut self, bytes: &[u8]) -> ArenaId<Font> {
-        self.renderer.render_buddy.add_font(bytes).unwrap()
+        self.renderer.add_font(bytes).unwrap()
     }
 
     pub fn load_font<P: AsRef<Path>>(&mut self, path: P) -> ArenaId<Font> {
         let bytes = self.asset_pipeline.load_path(path.as_ref()).unwrap();
 
         self.load_font_bytes(&bytes)
+    }
+
+    pub fn load_obj<P: AsRef<Path>>(&mut self, path: P) -> Model {
+        let parent_path = &path.as_ref().parent().unwrap();
+        let obj_bytes = self
+            .asset_pipeline
+            .load_path(&path.as_ref())
+            .expect("Couldnt load obj");
+        // let mut mtl_bytes = self
+        //     .load_path(&path.as_ref().join(".mtl"))
+        //     .expect("Couldnt load mtl");
+        // let file = Cursor::new(obj_bytes);
+        // let mtl = tobj::load_mtl_buf(&mut file).unwrap();
+        let mut file = Cursor::new(obj_bytes);
+        let (models, materials) = tobj::load_obj_buf(
+            &mut file,
+            &tobj::LoadOptions {
+                triangulate: true,
+                single_index: true,
+                ..Default::default()
+            },
+            |p| {
+                let mtl_bytes = self
+                    .asset_pipeline
+                    .load_path(&parent_path.join(p))
+                    .expect("Couldnt load mtl");
+                let mut file: Cursor<Vec<u8>> = Cursor::new(mtl_bytes);
+                tobj::load_mtl_buf(&mut file)
+            },
+        )
+        .unwrap();
+
+        let mut model = Model::default();
+
+        for mat in materials.unwrap() {
+            if let Some(texture_path) = mat.diffuse_texture {
+                let texture_handle = self.load_texture(&parent_path.join(texture_path));
+                model.texture = texture_handle;
+            }
+        }
+
+        for m in models {
+            for i in 0..m.mesh.positions.len() / 3 {
+                model.positions.push(Vec3::new(
+                    m.mesh.positions[i * 3],
+                    m.mesh.positions[i * 3 + 1],
+                    m.mesh.positions[i * 3 + 2],
+                ));
+
+                if !m.mesh.vertex_color.is_empty() {
+                    model.colors.push(Vec4::new(
+                        m.mesh.vertex_color[i * 3],
+                        m.mesh.vertex_color[i * 3 + 1],
+                        m.mesh.vertex_color[i * 3 + 2],
+                        m.mesh.vertex_color[i * 3 + 3],
+                    ));
+                }
+
+                if !m.mesh.texcoords.is_empty() {
+                    model.tex_coords.push(Vec2::new(
+                        m.mesh.texcoords[i * 2],
+                        m.mesh.texcoords[i * 2 + 1],
+                    ));
+                }
+
+                if !m.mesh.normals.is_empty() {
+                    model.normals.push(Vec3::new(
+                        m.mesh.normals[i * 3],
+                        m.mesh.normals[i * 3 + 1],
+                        m.mesh.normals[i * 3 + 2],
+                    ));
+                }
+            }
+
+            model.indices = m.mesh.indices;
+        }
+
+        model
     }
 }
 
@@ -254,6 +335,19 @@ impl AssetPipeline {
                     data: ase.frame(0).image().as_bytes().to_vec(),
                     dimensions: (ase.size().0 as u32, ase.size().1 as u32),
                     ..Default::default()
+                }
+            }
+            "jpg" | "jpeg" => {
+                match image::load_from_memory_with_format(file_bytes, image::ImageFormat::Jpeg) {
+                    Ok(img) => {
+                        let img = img.to_rgba8();
+                        return Ok(Image {
+                            data: img.as_bytes().to_vec(),
+                            dimensions: (img.width() as _, img.height() as _),
+                            ..Default::default()
+                        });
+                    }
+                    Err(e) => return Err(e.to_string()),
                 }
             }
             _ => match image::load_from_memory_with_format(file_bytes, image::ImageFormat::Png) {

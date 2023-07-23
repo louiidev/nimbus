@@ -4,7 +4,7 @@ mod convert_winit_inputs;
 #[cfg(feature = "sdl")]
 mod convert_sdl_inputs;
 
-use crate::{camera::Camera, window::Gamepads, Engine};
+use crate::{window::Gamepads, Engine};
 use glam::{UVec2, Vec2};
 use std::{
     collections::{hash_set::Iter, HashMap, HashSet},
@@ -14,6 +14,7 @@ use std::{
 #[derive(Default)]
 pub struct InputManager {
     pub mouse_position: Vec2,
+    pub mouse_motion: Vec2,
     // pub key_mappings: HashMap<String, KeyMapping>,
     pub controllers: Gamepads,
     pub axis: HashMap<Axis, f32>,

@@ -1,5 +1,5 @@
+use crate::renderer::rect::Rect;
 use glam::{Vec2, Vec3};
-use render_buddy::rect::Rect;
 
 pub struct Raycast3D {
     pub origin: Vec3,

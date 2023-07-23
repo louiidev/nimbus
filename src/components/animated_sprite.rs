@@ -1,7 +1,8 @@
 use super::timer::{self, Timer};
+use crate::arena::ArenaId;
+use crate::renderer::{sprite::Sprite, texture::Texture, texture_atlas::TextureAtlas};
 use crate::{asset_loader::FrameData, time::Time};
 use glam::Vec2;
-use render_buddy::{arena::ArenaId, sprite::Sprite, texture::Texture, texture_atlas::TextureAtlas};
 use std::{collections::HashMap, fmt::Debug, hash::Hash, str::FromStr};
 
 #[derive(Default, Debug, Clone)]

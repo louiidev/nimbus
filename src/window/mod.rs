@@ -59,9 +59,7 @@ pub trait WindowEngineAbstraction {
 impl Engine {
     pub fn window_resized(&mut self, window_size: UVec2) {
         self.window_size = window_size;
-        self.renderer
-            .render_buddy
-            .resize((window_size.x, window_size.y));
+        self.renderer.resize((window_size.x, window_size.y));
         // self.ui.resize(window_size.as_vec2());
     }
 }

@@ -5,7 +5,9 @@ use glam::Vec2;
 
 use wgpu::TextureFormat;
 
-use crate::components::dynamic_texture_atlas_builder::{DynamicTextureAtlasBuilder, TempImageData};
+use super::texture::{self, Image};
+
+use super::dynamic_texture_atlas_builder::DynamicTextureAtlasBuilder;
 
 pub(crate) struct FontAtlas {
     pub dynamic_texture_atlas_builder: DynamicTextureAtlasBuilder,
@@ -14,14 +16,15 @@ pub(crate) struct FontAtlas {
 
 impl FontAtlas {
     pub fn new(size: Vec2) -> FontAtlas {
-        let temp_image_data = TempImageData {
+        let temp_image_data = Image {
             data: vec![
                 0;
                 (size.x * size.y) as usize
-                    * TextureFormat::Rgba8UnormSrgb.describe().block_size as usize
+                    * TextureFormat::Rgba8UnormSrgb.block_size(None).unwrap() as usize
             ],
-            size: size.as_ivec2(),
             format: TextureFormat::Rgba8UnormSrgb,
+            dimensions: (size.x as u32, size.y as u32),
+            sampler: texture::TextureSamplerType::Nearest,
         };
 
         let dynamic_texture_atlas_builder =
@@ -44,9 +47,9 @@ impl FontAtlas {
     pub fn add_glyph(
         &mut self,
         glyph: char,
-        image: &TempImageData,
+        image: &Image,
         glyph_metrics: Metrics,
-    ) -> Option<TempImageData> {
+    ) -> Option<Image> {
         if let Some((index, new_image)) = self.dynamic_texture_atlas_builder.add_texture(image) {
             self.glyph_atlas_info.insert(glyph, (index, glyph_metrics));
             return Some(new_image);
