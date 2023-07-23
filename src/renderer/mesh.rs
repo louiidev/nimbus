@@ -1,13 +1,11 @@
 use std::{collections::BTreeMap, mem};
 
 use bytemuck::{cast_slice, AnyBitPattern};
-use egui::Id;
-use glam::{Vec2, Vec3};
-use guillotiere::euclid::default;
-use tobj::LoadOptions;
+
+use glam::Vec2;
 use wgpu::{VertexAttribute, VertexFormat};
 
-use crate::{arena::ArenaId, pipeline::Pipeline, texture::Texture, transform::Transform};
+use crate::{material::Material, transform::Transform};
 
 pub const QUAD_INDICES: [u16; 6] = [0, 2, 3, 0, 1, 2];
 
@@ -136,26 +134,22 @@ impl Default for Indices {
 }
 
 pub struct MeshBuilder {
-    pub(crate) texture_handle: Option<ArenaId<Texture>>,
-    pub(crate) material_handle: ArenaId<Pipeline>,
+    pub(crate) material: Material,
     pub(crate) vertices: Vec<Vertex>,
     pub(crate) indices: Indices,
-    pub(crate) batch: bool,
 }
 
 impl MeshBuilder {
-    pub fn new() -> Self {
+    pub fn new(material: Material) -> Self {
         Self {
-            texture_handle: None,
-            material_handle: ArenaId::first(), // TODO(loui): we should really ref the default material but its hard without a ref to rb
+            material,
             vertices: Vec::default(),
             indices: Indices::default(),
-            batch: true,
         }
     }
 
     pub fn quad(size: Vec2, transform: Transform) -> Self {
-        MeshBuilder::new()
+        MeshBuilder::new(Material::default())
             .with_attributes(
                 MeshAttribute::Position,
                 QUAD_VERTEX_POSITIONS
@@ -168,12 +162,6 @@ impl MeshBuilder {
                     .collect(),
             )
             .with_indices(Indices::U16(QUAD_INDICES.to_vec()))
-    }
-
-    pub fn with_batch(mut self, batch: bool) -> Self {
-        self.batch = batch;
-
-        self
     }
 
     pub fn with_vertices(mut self, vertices: Vec<Vertex>) -> Self {
@@ -217,55 +205,27 @@ impl MeshBuilder {
         self
     }
 
-    pub fn with_material(mut self, material_handle: ArenaId<Pipeline>) -> Self {
-        self.material_handle = material_handle;
-
-        self
-    }
-
-    pub fn with_texture(mut self, texture_handle: ArenaId<Texture>) -> Self {
-        self.texture_handle = Some(texture_handle);
-
-        self
-    }
-
     pub fn build(self) -> Mesh {
         Mesh {
-            texture_handle: self.texture_handle,
-            material_handle: self.material_handle,
+            material: self.material,
             vertices: self.vertices,
             indices: self.indices,
-            sort_value: 0.,
-            batch: self.batch,
         }
     }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct Mesh {
-    pub(crate) texture_handle: Option<ArenaId<Texture>>,
-    pub material_handle: ArenaId<Pipeline>,
+    pub material: Material,
     pub(crate) vertices: Vec<Vertex>,
     pub(crate) indices: Indices,
-    // used for sorting
-    pub(crate) sort_value: f32,
-    pub(crate) batch: bool,
 }
 impl Mesh {
-    pub fn new(
-        texture_handle: Option<ArenaId<Texture>>,
-        material_handle: ArenaId<Pipeline>,
-        vertices: Vec<Vertex>,
-        indices: Indices,
-        sort_value: f32,
-    ) -> Self {
+    pub fn new(material: Material, vertices: Vec<Vertex>, indices: Indices) -> Self {
         Self {
-            material_handle,
-            texture_handle,
+            material,
             vertices,
             indices,
-            sort_value,
-            batch: true,
         }
     }
 

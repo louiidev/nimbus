@@ -9,14 +9,12 @@ use crate::{arena::ArenaId, components::color::Color, utils::float_ord::FloatOrd
 use super::{
     font_atlas::FontAtlas,
     fonts::{Font, GlyphAtlasInfo, PositionedGlyph},
-    pipeline::Pipeline,
     texture::{Image, Texture},
     Renderer,
 };
 
 pub struct Text {
     handle: ArenaId<Font>,
-    pub material: Option<ArenaId<Pipeline>>,
     value: String,
     font_size: f32,
     pub color: Color,
@@ -68,7 +66,6 @@ impl Default for Text {
     fn default() -> Self {
         Self {
             handle: ArenaId::first(),
-            material: None,
             value: Default::default(),
             font_size: Default::default(),
             vertical_alignment: VerticalAlign::Top,

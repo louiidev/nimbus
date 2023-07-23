@@ -61,7 +61,6 @@ pub struct RenderContext {
 }
 
 pub struct Renderer {
-    pub sorting_axis: Vec3,
     pub(crate) fonts: Arena<Font>,
     pub(crate) font_atlases: HashMap<(FontSizeKey, ArenaId<Font>), FontAtlas>,
     pub textures: Arena<Texture>,
@@ -80,7 +79,6 @@ pub struct Renderer {
     pub(crate) ui_render_data: Vec<Mesh>,
     pub(crate) current_layout: Vec<Layout>,
     pub(crate) depth_texture_handle: ArenaId<Texture>,
-    pub mode_3d: bool,
 }
 
 impl Renderer {
@@ -208,8 +206,10 @@ impl Renderer {
         textures.insert(blank_texture);
         let depth_texture_handle = textures.insert(depth_texture);
 
+        let default_shader = PipelineBuilder::new(include_wgsl!("./default_shaders/default.wgsl"))
+            .build(&device, &surface_config);
+
         let mut renderer = Self {
-            sorting_axis: Vec3::Z,
             #[cfg(feature = "egui")]
             egui_render_pass: RenderPass::new(&device, surface_format, 1),
             camera_bind_group_layout,
@@ -235,11 +235,7 @@ impl Renderer {
             ui_render_data: Vec::default(),
             current_layout: Vec::default(),
             depth_texture_handle,
-            mode_3d: false,
         };
-
-        let default_shader = PipelineBuilder::new(include_wgsl!("./default_shaders/default.wgsl"))
-            .build(&device, &surface_config);
 
         renderer.default_shaders.default = renderer.shaders.insert(default_shader);
 
@@ -346,19 +342,14 @@ impl Renderer {
                             resolve_target: None,
                             ops: wgpu::Operations { load, store: true },
                         })],
-                        depth_stencil_attachment: if self.mode_3d {
-                            dbg!("FIRES depth stencil");
-                            Some(wgpu::RenderPassDepthStencilAttachment {
-                                view: &self.textures.get(self.depth_texture_handle).unwrap().view,
-                                depth_ops: Some(wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(1.0),
-                                    store: true,
-                                }),
-                                stencil_ops: None,
-                            })
-                        } else {
-                            None
-                        },
+                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                            view: &self.textures.get(self.depth_texture_handle).unwrap().view,
+                            depth_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(1.0),
+                                store: true,
+                            }),
+                            stencil_ops: None,
+                        }),
                     });
 
             render_queued_draw_calls(
@@ -395,10 +386,6 @@ impl Renderer {
                     .unwrap(),
             ),
         );
-    }
-
-    pub fn set_sorting_axis(&mut self, sorting_axis: Vec3) {
-        self.sorting_axis = sorting_axis;
     }
 
     pub fn append(&mut self, mut meshes: Vec<Mesh>) {

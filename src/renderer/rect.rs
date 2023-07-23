@@ -4,10 +4,11 @@ use glam::Vec2;
 
 use crate::{
     components::color::Color,
+    material::Material,
     mesh::{
         AttributeValue, Mesh, MeshAttribute, Vertex, QUAD_INDICES, QUAD_UVS, QUAD_VERTEX_POSITIONS,
     },
-    Anchor, ArenaId, Transform,
+    Anchor, Transform,
 };
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -85,14 +86,10 @@ impl Rect {
             })
             .collect();
 
-        let material_handle = ArenaId::first();
-
         Mesh::new(
-            Some(ArenaId::first()),
-            material_handle,
+            Material::default(),
             vertices,
             crate::mesh::Indices::U16(QUAD_INDICES.to_vec()),
-            (transform.position).length(),
         )
     }
 }

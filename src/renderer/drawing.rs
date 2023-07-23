@@ -3,11 +3,9 @@ use std::collections::BTreeMap;
 use glam::{Vec2, Vec3};
 
 use crate::{
-    arena::ArenaId,
     components::{color::Color, line::Line2D},
-    cube::Cube,
     fonts::PositionedGlyph,
-    line::LineMeshBuilder,
+    material::Material,
     mesh::{
         AttributeValue, Indices, Mesh, MeshAttribute, MeshBuilder, Vertex, QUAD_INDICES, QUAD_UVS,
         QUAD_VERTEX_POSITIONS,
@@ -19,10 +17,6 @@ use crate::{
 use super::{rect::Rect, sprite::Sprite, text::Text, transform::Transform, Renderer};
 
 impl Renderer {
-    pub fn set_sorting_axis_2d(&mut self, sorting_axis: Vec3) {
-        self.sorting_axis = sorting_axis;
-    }
-
     pub fn rect_to_mesh(&mut self, rect: &Rect, color: Color) -> Mesh {
         let quad_size = rect.size();
         let transform = Transform::from_position(rect.min.extend(0.));
@@ -47,14 +41,12 @@ impl Renderer {
             })
             .collect();
 
-        let material_handle = self.material_map.default;
+        let shader_handle = self.default_shaders.default;
 
         Mesh::new(
-            Some(ArenaId::first()),
-            material_handle,
+            Material::new(shader_handle),
             vertices,
             Indices::U16(QUAD_INDICES.to_vec()),
-            (transform.position * self.sorting_axis).length(),
         )
     }
 
@@ -71,7 +63,7 @@ impl Renderer {
     pub fn draw_sprite(&mut self, sprite: &Sprite, mut transform: Transform) {
         let texture = self
             .textures
-            .get(sprite.handle)
+            .get(sprite.material.texture)
             .expect("Mesh is missing texture");
 
         let mut uvs = QUAD_UVS;
@@ -102,8 +94,6 @@ impl Renderer {
             quad_size = custom_size;
         }
 
-        let sort_value = transform.position * self.sorting_axis;
-
         transform.position.z = 0.;
 
         let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
@@ -124,16 +114,10 @@ impl Renderer {
             })
             .collect();
 
-        let material_handle = sprite.material.unwrap_or(self.material_map.default);
-
-        let mut mesh = MeshBuilder::new()
+        let mut mesh = MeshBuilder::new(sprite.material)
             .with_indices(crate::mesh::Indices::U16(QUAD_INDICES.to_vec()))
             .with_vertices(vertices)
-            .with_material(material_handle)
-            .with_texture(sprite.handle)
             .build();
-
-        mesh.sort_value = sort_value.x + sort_value.y + sort_value.z;
 
         self.push(mesh);
     }
@@ -200,15 +184,13 @@ impl Renderer {
                     ])));
                 }
 
-                let material_handle = text.material.unwrap_or(self.material_map.default);
+                let shader_handle = self.default_shaders.default;
 
                 Mesh {
-                    texture_handle: Some(text_glyph.atlas_info.texture_handle),
-                    material_handle,
+                    material: Material::new(shader_handle)
+                        .with_texture(text_glyph.atlas_info.texture_handle),
                     vertices,
                     indices: crate::mesh::Indices::U16(QUAD_INDICES.to_vec()),
-                    sort_value: transform.position.z,
-                    batch: true,
                 }
             })
             .collect();
@@ -220,20 +202,17 @@ impl Renderer {
         self.draw_text(text, Transform::from_position(position));
     }
 
-    pub fn draw_line(&mut self, line: &Line2D, color: &Color) {
-        self.push(LineMeshBuilder::new().line(line.0.extend(0.), line.1.extend(0.), color));
-    }
+    // pub fn draw_line(&mut self, line: &Line2D, color: &Color) {
+    //     self.push(LineMeshBuilder::new().line(line.0.extend(0.), line.1.extend(0.), color));
+    // }
 
-    pub fn draw_line_rect(&mut self, rect: &Rect, color: &Color) {
-        self.push(LineMeshBuilder::new().rect(rect, color.into()));
-    }
+    // pub fn draw_line_rect(&mut self, rect: &Rect, color: &Color) {
+    //     self.push(LineMeshBuilder::new().rect(rect, color.into()));
+    // }
 
     pub fn draw_model(&mut self, model: &Model, transform: Transform) {
-        let mut mesh_builder = MeshBuilder::new()
-            .with_texture(model.texture)
+        let mut mesh_builder = MeshBuilder::new(model.material)
             .with_indices(Indices::U32(model.indices.clone()))
-            .with_material(model.material)
-            .with_batch(false)
             .with_attributes(
                 MeshAttribute::Position,
                 model

@@ -1,10 +1,10 @@
 use glam::{Vec2, Vec3, Vec4};
 
-use crate::{material::Material, pipeline::Pipeline, ArenaId, Texture};
+use crate::{material::Material, ArenaId, Texture};
 
 #[derive(Debug)]
 pub struct Model {
-    pub material: ArenaId<Pipeline>,
+    pub material: Material,
     pub(crate) texture: ArenaId<Texture>,
     pub(crate) positions: Vec<Vec3>,
     pub(crate) tex_coords: Vec<Vec2>,

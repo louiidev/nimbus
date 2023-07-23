@@ -1,13 +1,12 @@
 use glam::Vec2;
 
-use crate::{arena::ArenaId, pipeline::Pipeline};
+use crate::{arena::ArenaId, material::Material};
 
 use super::{rect::Rect, texture::Texture};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Sprite {
-    pub handle: ArenaId<Texture>,
-    pub material: Option<ArenaId<Pipeline>>,
+    pub material: Material,
     pub anchor: Anchor,
     pub color: [f32; 4],
     pub texture_rect: Option<Rect>,
@@ -19,8 +18,7 @@ pub struct Sprite {
 impl Default for Sprite {
     fn default() -> Self {
         Sprite {
-            handle: ArenaId::first(),
-            material: None,
+            material: Material::default(),
             anchor: Anchor::default(),
             color: [1., 1., 1., 1.],
             texture_rect: None,
@@ -31,9 +29,9 @@ impl Default for Sprite {
     }
 }
 impl Sprite {
-    pub fn new(handle: ArenaId<Texture>) -> Self {
+    pub fn new(texture: ArenaId<Texture>) -> Self {
         Sprite {
-            handle,
+            material: Material::default().with_texture(texture),
             ..Default::default()
         }
     }

@@ -11,6 +11,7 @@ use crate::{
     mesh::{get_attribute_layout, MeshAttribute},
 };
 
+#[derive(Debug)]
 pub struct Shader {
     pipeline: RenderPipeline,
 }
