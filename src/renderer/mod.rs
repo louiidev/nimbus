@@ -4,7 +4,7 @@ use egui_wgpu_backend::RenderPass;
 use glam::Vec3;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use wgpu::{
-    BindGroup, BindGroupLayout, BindingType, CommandEncoder, Sampler, ShaderStages,
+    include_wgsl, BindGroup, BindGroupLayout, BindingType, CommandEncoder, Sampler, ShaderStages,
     SurfaceConfiguration, SurfaceTexture, TextureView,
 };
 
@@ -14,21 +14,18 @@ use crate::{
 };
 
 use self::{
-    batching::DrawCall,
     bind_groups::BindGroupLayoutBuilder,
     camera::Camera,
     errors::RenderError,
     font_atlas::FontAtlas,
     fonts::{Font, FontSizeKey},
-    line::LineMaterial,
-    material::DefaultMat,
     mesh::Mesh,
-    pipeline::Pipeline,
+    shader::{PipelineBuilder, Shader},
     texture::{Texture, TextureSamplerType},
     ui::Layout,
 };
 
-pub mod batching;
+// pub mod batching;
 pub mod bind_groups;
 pub mod camera;
 pub mod cube;
@@ -38,12 +35,13 @@ mod dynamic_texture_atlas_builder;
 pub mod errors;
 mod font_atlas;
 pub mod fonts;
-pub mod line;
+// pub mod line;
 pub mod material;
 pub mod mesh;
 pub mod model;
-pub mod pipeline;
+
 pub mod rect;
+pub mod shader;
 pub mod sprite;
 pub mod text;
 pub mod texture;
@@ -51,9 +49,9 @@ pub mod texture_atlas;
 pub mod transform;
 pub mod ui;
 
-pub struct MaterialMap {
-    default: ArenaId<Pipeline>,
-    line: ArenaId<Pipeline>,
+pub struct ShaderMap {
+    pub default: ArenaId<Shader>,
+    // line: ArenaId<Shader>,
 }
 
 pub struct RenderContext {
@@ -75,8 +73,8 @@ pub struct Renderer {
     queue: wgpu::Queue,
     surface: wgpu::Surface,
     surface_config: SurfaceConfiguration,
-    materials: Arena<Pipeline>,
-    pub(crate) material_map: MaterialMap,
+    shaders: Arena<Shader>,
+    pub(crate) default_shaders: ShaderMap,
     #[cfg(feature = "egui")]
     egui_render_pass: egui_wgpu_backend::RenderPass,
     pub(crate) ui_render_data: Vec<Mesh>,
@@ -210,7 +208,7 @@ impl Renderer {
         textures.insert(blank_texture);
         let depth_texture_handle = textures.insert(depth_texture);
 
-        let mut render_buddy = Self {
+        let mut renderer = Self {
             sorting_axis: Vec3::Z,
             #[cfg(feature = "egui")]
             egui_render_pass: RenderPass::new(&device, surface_format, 1),
@@ -229,10 +227,10 @@ impl Renderer {
                 (TextureSamplerType::Nearest, default_sampler_nearest),
                 (TextureSamplerType::Depth, depth_texture_sampler_handle),
             ]),
-            materials: Arena::new(),
-            material_map: MaterialMap {
-                default: ArenaId::default(),
-                line: ArenaId::default(),
+            shaders: Arena::new(),
+            default_shaders: ShaderMap {
+                default: ArenaId::first(),
+                // line: ArenaId::default(),
             },
             ui_render_data: Vec::default(),
             current_layout: Vec::default(),
@@ -240,30 +238,16 @@ impl Renderer {
             mode_3d: false,
         };
 
-        let default_mat = DefaultMat {};
-        let render_pipeline = render_buddy.create_pipeline_from_material(&default_mat);
-        let material_handle = render_buddy.materials.insert(Pipeline {
-            render_pipeline,
-            material: Box::from(default_mat),
-        });
-        render_buddy.material_map.default = material_handle;
+        let default_shader = PipelineBuilder::new(include_wgsl!("./default_shaders/default.wgsl"))
+            .build(&device, &surface_config);
 
-        let line_mat = LineMaterial;
+        renderer.default_shaders.default = renderer.shaders.insert(default_shader);
 
-        let render_pipeline = render_buddy.create_pipeline_from_material(&line_mat);
-
-        let line_material_handle = render_buddy.materials.insert(Pipeline {
-            render_pipeline,
-            material: Box::from(line_mat),
-        });
-
-        render_buddy.material_map.line = line_material_handle;
-
-        render_buddy.fonts.insert(
+        renderer.fonts.insert(
             Font::try_from_bytes(include_bytes!("./default_font/Roboto-Regular.ttf")).unwrap(),
         );
 
-        Ok(render_buddy)
+        Ok(renderer)
     }
     /// Begin the render process by prepping the [`RenderContext`]
     pub fn begin(&self) -> RenderContext {

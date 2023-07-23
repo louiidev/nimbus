@@ -4,7 +4,6 @@ use tobj::LoadOptions;
 
 use crate::arena::ArenaId;
 use crate::components::color::Color;
-use crate::material::Material;
 use crate::mesh::{AttributeValue, Mesh, MeshAttribute, MeshBuilder, Vertex};
 use crate::model::Model;
 use crate::renderer::{
