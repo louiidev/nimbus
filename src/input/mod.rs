@@ -25,6 +25,7 @@ pub struct InputManager {
     pub(crate) just_pressed: HashSet<Input>,
     /// A collection of every button that has just been released.
     pub(crate) just_released: HashSet<Input>,
+    pub scroll_value: f32,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -565,6 +566,7 @@ impl Engine {
     pub fn clear_inputs(&mut self) {
         self.input.just_pressed.clear();
         self.input.just_released.clear();
+        self.input.scroll_value = 0.;
     }
 
     pub fn get_axis(&mut self, axis: Axis) -> f32 {

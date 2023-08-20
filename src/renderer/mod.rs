@@ -1,12 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use egui_wgpu_backend::RenderPass;
-use glam::Vec3;
+use glam::{Mat4, Vec3};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use wgpu::{
-    include_wgsl, BindGroup, BindGroupLayout, BindingType, CommandEncoder, Sampler, ShaderStages,
-    SurfaceConfiguration, SurfaceTexture, TextureView,
+    include_wgsl, util::DeviceExt, BindGroup, BindGroupLayout, BindingType, Buffer, CommandEncoder,
+    PrimitiveTopology, Sampler, ShaderStages, SurfaceConfiguration, SurfaceTexture, TextureView,
 };
+use yakui_wgpu::{SurfaceInfo, YakuiWgpu};
 
 use crate::{
     arena::{Arena, ArenaId},
@@ -14,18 +15,19 @@ use crate::{
 };
 
 use self::{
+    batching::DrawCall,
     bind_groups::BindGroupLayoutBuilder,
-    camera::Camera,
+    camera::{Camera, CameraUniform, Projection},
     errors::RenderError,
     font_atlas::FontAtlas,
     fonts::{Font, FontSizeKey},
-    mesh::Mesh,
+    mesh::{Mesh, MeshAttribute},
     shader::{PipelineBuilder, Shader},
     texture::{Texture, TextureSamplerType},
     ui::Layout,
 };
 
-// pub mod batching;
+pub mod batching;
 pub mod bind_groups;
 pub mod camera;
 pub mod cube;
@@ -35,13 +37,15 @@ mod dynamic_texture_atlas_builder;
 pub mod errors;
 mod font_atlas;
 pub mod fonts;
-// pub mod line;
+pub mod line;
 pub mod material;
 pub mod mesh;
 pub mod model;
 
+pub mod quad;
 pub mod rect;
 pub mod shader;
+// pub mod shapes;
 pub mod sprite;
 pub mod text;
 pub mod texture;
@@ -51,7 +55,8 @@ pub mod ui;
 
 pub struct ShaderMap {
     pub default: ArenaId<Shader>,
-    // line: ArenaId<Shader>,
+    pub line: ArenaId<Shader>,
+    pub ui: ArenaId<Shader>,
 }
 
 pub struct RenderContext {
@@ -79,6 +84,8 @@ pub struct Renderer {
     pub(crate) ui_render_data: Vec<Mesh>,
     pub(crate) current_layout: Vec<Layout>,
     pub(crate) depth_texture_handle: ArenaId<Texture>,
+    pub(crate) ui_projection: Mat4,
+    yakui_wgpu: YakuiWgpu,
 }
 
 impl Renderer {
@@ -209,6 +216,21 @@ impl Renderer {
         let default_shader = PipelineBuilder::new(include_wgsl!("./default_shaders/default.wgsl"))
             .build(&device, &surface_config);
 
+        let default_ui_shader =
+            PipelineBuilder::new(include_wgsl!("./default_shaders/default.wgsl"))
+                .with_depth(false)
+                .build(&device, &surface_config);
+
+        let line_shader = PipelineBuilder::new(include_wgsl!("./default_shaders/line.wgsl"))
+            .with_topology(PrimitiveTopology::LineStrip)
+            .with_vertex_attributes(BTreeSet::from([
+                MeshAttribute::Position,
+                MeshAttribute::Color,
+            ]))
+            .build(&device, &surface_config);
+
+        let yakui_wgpu = YakuiWgpu::new(&device, &queue);
+
         let mut renderer = Self {
             #[cfg(feature = "egui")]
             egui_render_pass: RenderPass::new(&device, surface_format, 1),
@@ -230,14 +252,26 @@ impl Renderer {
             shaders: Arena::new(),
             default_shaders: ShaderMap {
                 default: ArenaId::first(),
-                // line: ArenaId::default(),
+                line: ArenaId::second(),
+                ui: ArenaId::first(),
             },
             ui_render_data: Vec::default(),
             current_layout: Vec::default(),
             depth_texture_handle,
+            ui_projection: Mat4::orthographic_rh(
+                0.,
+                viewport_size.0 as f32,
+                viewport_size.1 as f32,
+                0.,
+                0.,
+                1000.,
+            ),
+            yakui_wgpu,
         };
 
         renderer.default_shaders.default = renderer.shaders.insert(default_shader);
+        renderer.default_shaders.line = renderer.shaders.insert(line_shader);
+        renderer.default_shaders.ui = renderer.shaders.insert(default_ui_shader);
 
         renderer.fonts.insert(
             Font::try_from_bytes(include_bytes!("./default_font/Roboto-Regular.ttf")).unwrap(),
@@ -267,6 +301,11 @@ impl Renderer {
             view,
             command_encoder,
         }
+    }
+
+    pub fn create_shader(&mut self, pipeline_builder: PipelineBuilder) -> ArenaId<Shader> {
+        self.shaders
+            .insert(pipeline_builder.build(&self.device, &self.surface_config))
     }
 
     #[cfg(feature = "egui")]
@@ -315,21 +354,19 @@ impl Renderer {
     pub fn render(
         &mut self,
         render_context: &mut RenderContext,
-        clear_color: Option<Color>,
+        clear_color: Color,
         camera: &Camera,
+        yakui_state: &mut yakui::Yakui,
     ) {
-        let mesh_prepared_batch = self.prepare_mesh_batch();
+        let mesh_prepared_batch = self.create_draw_calls_from_meshes();
+        let ui_mesh_prepared_batch = self.prepare_ui_mesh_batch();
         let camera_bind_group = camera.create_bind_group(
             &self.device,
             (self.surface_config.width, self.surface_config.height),
             &self.camera_bind_group_layout,
         );
 
-        let load = if let Some(clear_color) = clear_color {
-            wgpu::LoadOp::Clear(clear_color.into())
-        } else {
-            wgpu::LoadOp::Load
-        };
+        let ui_camera_bind_group = self.create_ui_camera_bind_group(&self.camera_bind_group_layout);
 
         {
             let mut render_pass =
@@ -340,7 +377,10 @@ impl Renderer {
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: &render_context.view,
                             resolve_target: None,
-                            ops: wgpu::Operations { load, store: true },
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(clear_color.into()),
+                                store: true,
+                            },
                         })],
                         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                             view: &self.textures.get(self.depth_texture_handle).unwrap().view,
@@ -355,10 +395,48 @@ impl Renderer {
             render_queued_draw_calls(
                 &mesh_prepared_batch,
                 &mut render_pass,
-                &self.materials,
+                &self.shaders,
                 &camera_bind_group,
             );
         }
+
+        self.yakui_wgpu.paint_with_encoder(
+            yakui_state,
+            &self.device,
+            &self.queue,
+            &mut render_context.command_encoder,
+            SurfaceInfo {
+                format: self.surface_config.format,
+                color_attachment: &render_context.view,
+                resolve_target: None,
+                sample_count: 1,
+            },
+        )
+
+        // {
+        //     let mut render_pass =
+        //         render_context
+        //             .command_encoder
+        //             .begin_render_pass(&wgpu::RenderPassDescriptor {
+        //                 label: Some("Render Pass"),
+        //                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+        //                     view: &render_context.view,
+        //                     resolve_target: None,
+        //                     ops: wgpu::Operations {
+        //                         load: wgpu::LoadOp::Load,
+        //                         store: true,
+        //                     },
+        //                 })],
+        //                 depth_stencil_attachment: None,
+        //             });
+
+        //     render_queued_draw_calls(
+        //         &ui_mesh_prepared_batch,
+        //         &mut render_pass,
+        //         &self.shaders,
+        //         &ui_camera_bind_group,
+        //     )
+        // }
     }
 
     /// Presents the frame to WGPU for rendering
@@ -396,25 +474,55 @@ impl Renderer {
         self.meshes.push(mesh);
     }
 
+    pub fn push_ui(&mut self, mesh: Mesh) {
+        self.ui_render_data.push(mesh);
+    }
+
     pub(crate) fn get_viewport_size(&self) -> (u32, u32) {
         (self.surface_config.width, self.surface_config.height)
+    }
+
+    pub(crate) fn create_ui_camera_bind_group(
+        &self,
+        bind_group_layout: &BindGroupLayout,
+    ) -> BindGroup {
+        let camera_uniform = CameraUniform {
+            view_proj: self.ui_projection.to_cols_array_2d(),
+        };
+
+        let camera_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Camera Buffer"),
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+                contents: bytemuck::cast_slice(&[camera_uniform]),
+            });
+
+        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+            label: Some("Camera bind group"),
+            layout: &bind_group_layout,
+        })
     }
 }
 
 fn render_queued_draw_calls<'a>(
     draw_calls: &'a Vec<DrawCall>,
     render_pass: &mut wgpu::RenderPass<'a>,
-    materials: &'a Arena<Pipeline>,
+    shaders: &'a Arena<Shader>,
     camera_bind_group: &'a BindGroup,
 ) {
-    let last_material = ArenaId::default();
+    let last_shader = ArenaId::default();
 
     for draw_call in draw_calls {
-        if draw_call.material_handle != last_material {
-            let pipeline: &Pipeline = materials
-                .get(draw_call.material_handle)
+        if draw_call.shader != last_shader {
+            let shader: &Shader = shaders
+                .get(draw_call.shader)
                 .expect("Mesh was given invalid pipeline id");
-            render_pass.set_pipeline(&pipeline.render_pipeline);
+            render_pass.set_pipeline(&shader.pipeline);
 
             render_pass.set_bind_group(0, &camera_bind_group, &[]); // can probably do this once before the loop
         }

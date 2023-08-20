@@ -4,18 +4,20 @@ use fontdue::layout::{
 use glam::Vec2;
 use wgpu::TextureFormat;
 
-use crate::{arena::ArenaId, components::color::Color, utils::float_ord::FloatOrd};
+use crate::{
+    arena::ArenaId, components::color::Color, utils::float_ord::FloatOrd, Rect, Transform,
+};
 
 use super::{
     font_atlas::FontAtlas,
     fonts::{Font, GlyphAtlasInfo, PositionedGlyph},
-    texture::{Image, Texture},
+    texture::Texture,
     Renderer,
 };
 
 pub struct Text {
-    handle: ArenaId<Font>,
-    value: String,
+    pub handle: ArenaId<Font>,
+    pub value: String,
     font_size: f32,
     pub color: Color,
     vertical_alignment: VerticalAlign,
@@ -38,30 +40,6 @@ impl Text {
     }
 }
 
-impl Renderer {
-    pub fn measure_text(&mut self, text: &Text) -> Vec2 {
-        let positioned_glyphs = self.get_positioned_glyphs(text, None);
-
-        let size: Vec2 = positioned_glyphs.iter().fold(
-            Vec2::default(),
-            |mut size: Vec2, text_glyph: &PositionedGlyph| {
-                let rect = text_glyph.rect;
-                let glyph_position = text_glyph.position;
-
-                let x_distance = glyph_position.x - size.x;
-                let y_distance = glyph_position.y + size.y;
-                let actual_glyph_size = rect.size();
-                size.y = size.y.max(actual_glyph_size.y + y_distance.abs() / 2.);
-                size.x += actual_glyph_size.x + x_distance;
-
-                size
-            },
-        );
-        // panic!();
-        size
-    }
-}
-
 impl Default for Text {
     fn default() -> Self {
         Self {
@@ -69,30 +47,160 @@ impl Default for Text {
             value: Default::default(),
             font_size: Default::default(),
             vertical_alignment: VerticalAlign::Top,
-            horizontal_alignment: HorizontalAlign::Center,
+            horizontal_alignment: HorizontalAlign::Left,
             y_axis_orientation: CoordinateSystem::PositiveYUp,
             color: Color::WHITE, // White
         }
     }
 }
 
-impl Renderer {
-    pub(crate) fn get_positioned_glyphs(
-        &mut self,
-        text: &Text,
-        container_size: Option<Vec2>,
-    ) -> Vec<PositionedGlyph> {
-        let texture = self.add_glyphs_to_atlas(text.handle, &text.value, text.font_size);
+pub(crate) fn get_text_layout_offset_x(text_layout: &Layout) -> f32 {
+    let offset_x = text_layout
+        .glyphs()
+        .iter()
+        .map(|glyph| glyph.x)
+        .min_by(|a, b| a.total_cmp(b))
+        .unwrap_or_default();
 
-        if let Some(temp_texture_data) = texture {
+    offset_x
+}
+
+pub(crate) fn get_text_layout_size(text_layout: &Layout) -> Vec2 {
+    let height = text_layout
+        .lines()
+        .iter()
+        .flat_map(|line_pos_vec| line_pos_vec.iter())
+        .map(|line| line.baseline_y - line.min_descent)
+        .max_by(|a, b| a.total_cmp(b))
+        .unwrap_or_default();
+
+    let width = text_layout
+        .glyphs()
+        .iter()
+        .map(|glyph| glyph.x + glyph.width as f32)
+        .max_by(|a, b| a.total_cmp(b))
+        .unwrap_or_default();
+
+    Vec2::new(width, height)
+}
+
+impl Renderer {
+    pub(crate) fn paint_text(&mut self, text: &Text) -> Vec<PositionedGlyph> {
+        self.add_glyphs_to_atlas(&text, text.font_size);
+
+        let texture_handle = *self
+            .fonts
+            .get(text.handle)
+            .unwrap()
+            .texture_ids
+            .get(&(FloatOrd(text.font_size)))
+            .expect("Error, missing texture id for font");
+
+        let mut text_layout = Layout::new(CoordinateSystem::PositiveYUp);
+
+        text_layout.reset(&LayoutSettings {
+            x: 0.0,
+            y: 0.0,
+            max_width: None,
+            max_height: None,
+            horizontal_align: text.horizontal_alignment,
+            vertical_align: text.vertical_alignment,
+            ..Default::default()
+        });
+        let font = &self.fonts.get(text.handle).unwrap().font;
+        text_layout.append(&[font], &TextStyle::new(&text.value, text.font_size, 0));
+
+        let offset_x = get_text_layout_offset_x(&text_layout);
+
+        let pos = Vec2::new(offset_x, 0.0);
+
+        text_layout
+            .glyphs()
+            .iter()
+            .map(|glyph| {
+                let atlas_info = self
+                    .get_glyph_atlas_info(text.font_size, text.handle, glyph.parent, texture_handle)
+                    .unwrap();
+
+                let size = Vec2::new(glyph.width as f32, glyph.height as f32);
+                return PositionedGlyph {
+                    position: pos + Vec2::new(glyph.x, glyph.y),
+
+                    rect: Rect::from_center_size(pos + Vec2::new(glyph.x, glyph.y), size),
+                    atlas_info,
+                };
+            })
+            .collect()
+    }
+
+    // pub(crate) fn get_positioned_glyphs(
+    //     &mut self,
+    //     text: &Text,
+    //     container_size: Option<Vec2>,
+    // ) -> Vec<PositionedGlyph> {
+    //     self.add_glyphs_to_atlas(&text, text.font_size);
+
+    //     let texture_handle = *self
+    //         .fonts
+    //         .get(text.handle)
+    //         .unwrap()
+    //         .texture_ids
+    //         .get(&(FloatOrd(text.font_size)))
+    //         .expect("Error, missing texture id for font");
+
+    //     let mut positioned_glyphs = Vec::new();
+
+    //     let mut layout = Layout::new(text.y_axis_orientation);
+
+    //     layout.reset(&LayoutSettings {
+    //         x: 0.0,
+    //         y: 0.0,
+    //         max_width: container_size.map(|size| size.x),
+    //         max_height: container_size.map(|size| size.y),
+    //         horizontal_align: text.horizontal_alignment,
+    //         vertical_align: text.vertical_alignment,
+    //         ..Default::default()
+    //     });
+    //     let font = &self.fonts.get(text.handle).unwrap().font;
+    //     layout.append(&[font], &TextStyle::new(&text.value, text.font_size, 0));
+
+    //     for glyph in layout.glyphs() {
+    //         let atlas_info = self
+    //             .get_glyph_atlas_info(text.font_size, text.handle, glyph.parent, texture_handle)
+    //             .unwrap();
+
+    //         positioned_glyphs.push(PositionedGlyph {
+    //             position: Vec2::new(glyph.x, glyph.y),
+    //             rect: atlas_info.texture_rect,
+    //             atlas_info,
+    //         });
+    //     }
+
+    //     positioned_glyphs
+    // }
+
+    pub(crate) fn add_glyphs_to_atlas(&mut self, text: &Text, font_size: f32) {
+        let font_atlas = self
+            .font_atlases
+            .entry((FloatOrd(font_size), text.handle))
+            .or_insert_with(|| FontAtlas::new(Vec2::splat(512.0)));
+        let font = self.fonts.get(text.handle).unwrap();
+        let mut update_texture_data = None;
+        for character in text.value.chars() {
+            if !font_atlas.has_glyph(character) {
+                let (metrics, bitmap) = font.rasterize(character, font_size);
+                update_texture_data = font_atlas.add_glyph(character, &bitmap, metrics);
+            }
+        }
+
+        if let Some(texture) = update_texture_data {
             let texture = self.add_texture_bytes(
-                &temp_texture_data.data,
-                temp_texture_data.dimensions,
+                &texture.data,
+                texture.dimensions,
                 crate::texture::TextureSamplerType::Linear,
                 TextureFormat::Rgba8UnormSrgb,
             );
 
-            // Update texture or insert new texture
             if let Some(handle) = self
                 .fonts
                 .get(text.handle)
@@ -111,66 +219,6 @@ impl Renderer {
                     .insert(FloatOrd(text.font_size), texture_handle);
             }
         }
-
-        let texture_handle = *self
-            .fonts
-            .get(text.handle)
-            .unwrap()
-            .texture_ids
-            .get(&(FloatOrd(text.font_size)))
-            .expect("Error, missing texture id for font");
-
-        let mut positioned_glyphs = Vec::new();
-
-        let mut layout = Layout::new(text.y_axis_orientation);
-
-        layout.reset(&LayoutSettings {
-            x: 0.0,
-            y: 0.0,
-            max_width: container_size.map(|size| size.x),
-            max_height: container_size.map(|size| size.y),
-            horizontal_align: text.horizontal_alignment,
-            vertical_align: text.vertical_alignment,
-            ..Default::default()
-        });
-        let font = &self.fonts.get(text.handle).unwrap().font;
-        layout.append(&[font], &TextStyle::new(&text.value, text.font_size, 0));
-
-        for glyph in layout.glyphs() {
-            let atlas_info = self
-                .get_glyph_atlas_info(text.font_size, text.handle, glyph.parent, texture_handle)
-                .unwrap();
-
-            positioned_glyphs.push(PositionedGlyph {
-                position: Vec2::new(glyph.x, glyph.y),
-                rect: atlas_info.texture_rect,
-                atlas_info,
-            });
-        }
-
-        positioned_glyphs
-    }
-
-    pub(crate) fn add_glyphs_to_atlas(
-        &mut self,
-        font_handle: ArenaId<Font>,
-        text: &str,
-        font_size: f32,
-    ) -> Option<Image> {
-        let font_atlas = self
-            .font_atlases
-            .entry((FloatOrd(font_size), font_handle))
-            .or_insert_with(|| FontAtlas::new(Vec2::splat(512.0)));
-        let font = self.fonts.get(font_handle).unwrap();
-        let mut update_texture_data = None;
-        for character in text.chars() {
-            if !font_atlas.has_glyph(character) {
-                let (metrics, bitmap) = font.rasterize(character, font_size);
-                update_texture_data = font_atlas.add_glyph(character, &bitmap, metrics);
-            }
-        }
-
-        update_texture_data
     }
 
     pub fn get_glyph_atlas_info(

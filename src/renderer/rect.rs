@@ -55,11 +55,8 @@ impl Rect {
         self.max - self.min
     }
 
-    pub fn new(size: Vec2) -> Self {
-        Self {
-            min: Vec2::ZERO,
-            max: size,
-        }
+    pub fn new(x0: f32, y0: f32, x1: f32, y1: f32) -> Self {
+        Self::from_corners(Vec2::new(x0, y0), Vec2::new(x1, y1))
     }
 
     pub fn into_mesh(&self, color: Color) -> Mesh {

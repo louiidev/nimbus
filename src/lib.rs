@@ -22,14 +22,17 @@ use audio::Audio;
 use components::color::Color;
 #[cfg(feature = "egui")]
 pub use egui;
+use egui::Ui;
 use egui_inspect::EguiInspect;
 #[cfg(feature = "egui")]
 use egui_winit_platform::{Platform, PlatformDescriptor};
 pub use glam as math;
-pub use renderer::*;
-
 use glam::UVec2;
 use input::InputManager;
+use renderer::camera::CameraController;
+pub use renderer::*;
+pub use wgpu;
+pub use yakui;
 // use old_renderer::{ui::Ui, Renderer};
 use renderer::{camera::Camera, Renderer};
 use time::Time;
@@ -39,6 +42,7 @@ pub trait Nimbus {
     fn init(&mut self, _engine: &mut Engine) {}
     fn update(&mut self, engine: &mut Engine, delta: f32);
     fn render(&mut self, renderer: &mut Renderer, delta: f32);
+    fn inspector(&mut self, engine: &Engine, ui: &mut Ui) {}
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -75,6 +79,9 @@ pub struct Engine {
     #[cfg(feature = "egui")]
     pub egui_platform: Platform,
     pub editor_state: EditorState,
+    #[cfg(debug_assertions)]
+    pub camera_controller: CameraController,
+    pub yakui: yakui::Yakui,
 }
 
 impl Engine {
@@ -88,12 +95,7 @@ impl Engine {
 
         let window_size = window.get_size();
 
-        let mut camera = Camera::orthographic();
-
-        camera.set_orthographic_perspective(
-            camera::CameraOrigin::Center,
-            window_descriptor.render_resolution.map(|v| v.as_vec2()),
-        );
+        let mut camera = Camera::default();
 
         let renderer = pollster::block_on(Renderer::new(
             &window.window,
@@ -109,7 +111,10 @@ impl Engine {
             ..Default::default()
         });
 
+        let yakui = yakui::Yakui::new();
+
         Self {
+            yakui,
             camera,
             window,
             renderer,
@@ -122,6 +127,8 @@ impl Engine {
             #[cfg(feature = "egui")]
             egui_platform,
             editor_state: EditorState::default(),
+            #[cfg(debug_assertions)]
+            camera_controller: CameraController::new(10.0, 0.4),
         }
     }
 
@@ -142,10 +149,16 @@ impl Engine {
             self.egui_platform.begin_frame();
         }
 
+        #[cfg(debug_assertions)]
+        {
+            // self.update_camera(self.time.delta_seconds());
+        }
+
         #[cfg(all(debug_assertions, feature = "egui"))]
         {
             egui::Window::new("Editor")
                 .default_width(320.)
+                .default_open(false)
                 .show(&self.egui_ctx(), |ui| {
                     let delta_seconds = self.time.raw_delta_seconds_f64();
                     ui.label(format!("Frame time: {}", (delta_seconds * 1000.0) as i32));
@@ -156,11 +169,12 @@ impl Engine {
                             .text("Delta time multiplier"),
                     );
                     self.camera.inspect_mut("test", ui);
+                    game.inspector(self, ui);
                 });
         }
 
         let delta = self.time.delta_seconds() * self.editor_state.delta_time_multiplier;
-
+        self.yakui.start();
         if !self.editor_state.paused {
             game.update(self, delta);
         }
@@ -173,10 +187,12 @@ impl Engine {
 
         let mut ctx = self.renderer.begin();
         game.render(&mut self.renderer, delta);
+        self.yakui.finish();
         self.renderer.render(
             &mut ctx,
-            Some(Color::hex("#6b6ab3").unwrap().as_rgba_linear().into()),
+            Color::hex("#6b6ab3").unwrap().as_rgba_linear(),
             &self.camera,
+            &mut self.yakui,
         );
 
         self.renderer

@@ -1,4 +1,4 @@
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat3, Mat4, Quat, Vec3};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Transform {
@@ -64,5 +64,60 @@ impl Transform {
             scale,
             ..Self::IDENTITY
         }
+    }
+
+    #[inline]
+    pub fn look_to(&mut self, direction: Vec3, up: Vec3) {
+        let back = -direction.try_normalize().unwrap_or(Vec3::NEG_Z);
+        let up = up.try_normalize().unwrap_or(Vec3::Y);
+        let right = up
+            .cross(back)
+            .try_normalize()
+            .unwrap_or_else(|| up.any_orthonormal_vector());
+        let up = back.cross(right);
+        self.rotation = Quat::from_mat3(&Mat3::from_cols(right, up, back));
+    }
+
+    #[inline]
+    pub fn look_at(&mut self, target: Vec3, up: Vec3) {
+        self.look_to(target - self.position, up);
+    }
+
+    pub fn looking_at(mut self, target: Vec3, up: Vec3) -> Self {
+        self.look_at(target, up);
+        self
+    }
+
+    /// Get the unit vector in the local `Z` direction.
+    #[inline]
+    pub fn local_z(&self) -> Vec3 {
+        self.rotation * Vec3::Z
+    }
+
+    #[inline]
+    pub fn local_x(&self) -> Vec3 {
+        self.rotation * Vec3::X
+    }
+
+    #[inline]
+    pub fn local_y(&self) -> Vec3 {
+        self.rotation * Vec3::Y
+    }
+
+    /// Equivalent to [`-local_z()`][Transform::local_z]
+    #[inline]
+    pub fn forward(&self) -> Vec3 {
+        -self.local_z()
+    }
+
+    #[inline]
+    pub fn right(&self) -> Vec3 {
+        self.local_x()
+    }
+
+    /// Equivalent to [`local_y()`][Transform::local_y]
+    #[inline]
+    pub fn up(&self) -> Vec3 {
+        self.local_y()
     }
 }

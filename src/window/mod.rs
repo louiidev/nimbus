@@ -60,6 +60,8 @@ impl Engine {
     pub fn window_resized(&mut self, window_size: UVec2) {
         self.window_size = window_size;
         self.renderer.resize((window_size.x, window_size.y));
+        self.camera
+            .resize(window_size.x as f32, window_size.y as f32);
         // self.ui.resize(window_size.as_vec2());
     }
 }

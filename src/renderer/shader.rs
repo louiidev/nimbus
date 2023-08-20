@@ -13,7 +13,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Shader {
-    pipeline: RenderPipeline,
+    pub pipeline: RenderPipeline,
 }
 
 pub struct PipelineBuilder<'a> {
@@ -21,6 +21,8 @@ pub struct PipelineBuilder<'a> {
     topology: PrimitiveTopology,
     vertex_attributes: BTreeSet<MeshAttribute>,
     label: String,
+    blending: wgpu::BlendState,
+    use_depth: bool,
 }
 
 impl<'a> PipelineBuilder<'a> {
@@ -34,7 +36,33 @@ impl<'a> PipelineBuilder<'a> {
                 MeshAttribute::Color,
             ]),
             label: "Generic Render Pipeline".to_string(),
+            blending: wgpu::BlendState::ALPHA_BLENDING,
+            use_depth: true,
         }
+    }
+
+    pub fn with_blending(mut self, blending: wgpu::BlendState) -> Self {
+        self.blending = blending;
+
+        self
+    }
+
+    pub fn with_depth(mut self, depth: bool) -> Self {
+        self.use_depth = depth;
+
+        self
+    }
+
+    pub fn with_topology(mut self, topology: PrimitiveTopology) -> Self {
+        self.topology = topology;
+
+        self
+    }
+
+    pub fn with_vertex_attributes(mut self, vertex_attributes: BTreeSet<MeshAttribute>) -> Self {
+        self.vertex_attributes = vertex_attributes;
+
+        self
     }
 
     pub fn build(self, device: &Device, surface_config: &SurfaceConfiguration) -> Shader {
@@ -90,7 +118,7 @@ impl<'a> PipelineBuilder<'a> {
 
         let binding = [Some(wgpu::ColorTargetState {
             format: surface_config.format,
-            blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+            blend: Some(self.blending),
             write_mask: wgpu::ColorWrites::ALL,
         })];
 
@@ -115,13 +143,17 @@ impl<'a> PipelineBuilder<'a> {
                 topology: self.topology,
                 strip_index_format: None,
             },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
+            depth_stencil: if self.use_depth {
+                Some(wgpu::DepthStencilState {
+                    format: TextureFormat::Depth32Float,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                })
+            } else {
+                None
+            },
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,

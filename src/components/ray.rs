@@ -1,6 +1,7 @@
 use crate::renderer::rect::Rect;
 use glam::{Vec2, Vec3};
 
+#[derive(Default, Debug)]
 pub struct Raycast3D {
     pub origin: Vec3,
     pub direction: Vec3,

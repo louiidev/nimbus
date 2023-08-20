@@ -3,14 +3,19 @@ use std::collections::BTreeMap;
 use glam::{Vec2, Vec3};
 
 use crate::{
-    components::{color::Color, line::Line2D},
+    components::{
+        color::Color,
+        line::{Line, Line2D},
+    },
     fonts::PositionedGlyph,
+    line::LineMeshBuilder,
     material::Material,
     mesh::{
         AttributeValue, Indices, Mesh, MeshAttribute, MeshBuilder, Vertex, QUAD_INDICES, QUAD_UVS,
         QUAD_VERTEX_POSITIONS,
     },
     model::Model,
+    quad::Quad,
     sprite::Anchor,
 };
 
@@ -19,7 +24,7 @@ use super::{rect::Rect, sprite::Sprite, text::Text, transform::Transform, Render
 impl Renderer {
     pub fn rect_to_mesh(&mut self, rect: &Rect, color: Color) -> Mesh {
         let quad_size = rect.size();
-        let transform = Transform::from_position(rect.min.extend(0.));
+        let transform = Transform::from_position(Vec3::new(rect.min.x, rect.min.y, 0.));
         let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
             transform
                 .transform_point(((quad_pos - Anchor::TopLeft.as_vec()) * quad_size).extend(0.))
@@ -60,6 +65,74 @@ impl Renderer {
         self.draw_sprite(sprite, Transform::from_position(position));
     }
 
+    pub fn draw_rect_ui(&mut self, rect: &Rect, color: Color) {
+        let mut mesh = self.rect_to_mesh(rect, color);
+        mesh.material = Material::new(self.default_shaders.ui);
+        self.push_ui(mesh);
+    }
+
+    pub fn draw_sprite_ui(&mut self, sprite: &Sprite, transform: Transform) {
+        let texture = self
+            .textures
+            .get(sprite.material.texture)
+            .expect("Mesh is missing texture");
+
+        let mut uvs = QUAD_UVS;
+
+        if sprite.flip_x {
+            uvs = [uvs[1], uvs[0], uvs[3], uvs[2]];
+        }
+        if sprite.flip_y {
+            uvs = [uvs[3], uvs[2], uvs[1], uvs[0]];
+        }
+
+        let current_image_size = texture.dimensions;
+
+        // By default, the size of the quad is the size of the texture
+        let mut quad_size = current_image_size;
+
+        // If a rect is specified, adjust UVs and the size of the quad
+        if let Some(rect) = sprite.texture_rect {
+            let rect_size = rect.size();
+            for uv in &mut uvs {
+                *uv = (rect.min + *uv * rect_size) / current_image_size;
+            }
+            quad_size = rect_size;
+        }
+
+        // Override the size if a custom one is specified
+        if let Some(custom_size) = sprite.custom_size {
+            quad_size = custom_size;
+        }
+
+        let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
+            transform
+                .transform_point(
+                    ((quad_pos - sprite.anchor.as_vec()) * quad_size.normalize()).extend(0.),
+                )
+                .into()
+        });
+
+        let vertices = positions
+            .iter()
+            .zip(uvs)
+            .map(|(position, uv)| {
+                Vertex(BTreeMap::from([
+                    (MeshAttribute::Position, AttributeValue::Position(*position)),
+                    (MeshAttribute::UV, AttributeValue::UV(uv.into())),
+                    (MeshAttribute::Color, AttributeValue::Color(sprite.color)),
+                ]))
+            })
+            .collect();
+
+        let mesh = MeshBuilder::new(sprite.material.clone())
+            .with_indices(crate::mesh::Indices::U16(QUAD_INDICES.to_vec()))
+            .with_vertices(vertices)
+            .build();
+
+        self.push_ui(mesh);
+    }
+
     pub fn draw_sprite(&mut self, sprite: &Sprite, mut transform: Transform) {
         let texture = self
             .textures
@@ -94,11 +167,11 @@ impl Renderer {
             quad_size = custom_size;
         }
 
-        transform.position.z = 0.;
-
         let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
             transform
-                .transform_point(((quad_pos - sprite.anchor.as_vec()) * quad_size).extend(0.))
+                .transform_point(
+                    ((quad_pos - sprite.anchor.as_vec()) * quad_size.normalize()).extend(0.),
+                )
                 .into()
         });
 
@@ -114,7 +187,7 @@ impl Renderer {
             })
             .collect();
 
-        let mut mesh = MeshBuilder::new(sprite.material)
+        let mesh = MeshBuilder::new(sprite.material.clone())
             .with_indices(crate::mesh::Indices::U16(QUAD_INDICES.to_vec()))
             .with_vertices(vertices)
             .build();
@@ -123,34 +196,18 @@ impl Renderer {
     }
 
     pub fn draw_text(&mut self, text: &Text, mut transform: Transform) {
-        let positioned_glyphs = self.get_positioned_glyphs(text, None);
-        let size = positioned_glyphs.iter().fold(
-            Vec2::default(),
-            |mut size: Vec2, text_glyph: &PositionedGlyph| {
-                let rect = text_glyph.rect;
-                let glyph_position = text_glyph.position;
-
-                let x_distance = glyph_position.x - size.x;
-                let actual_glyph_size = rect.size();
-                size.y = size.y.max(actual_glyph_size.y);
-                size.x += actual_glyph_size.x + x_distance;
-
-                size
-            },
-        );
-
-        let offset = Vec2::new(size.x / 2. * transform.scale.x, -size.y * transform.scale.y);
-        transform.position -= offset.extend(0.);
+        let positioned_glyphs = self.paint_text(text);
 
         let meshes: Vec<super::mesh::Mesh> = positioned_glyphs
             .iter()
             .map(|text_glyph| {
                 // let transform = Transform::from_translation(position + text_glyph.position.extend(0.));
                 let mut transform = transform.clone();
+                transform.scale = Vec3::splat(0.02);
                 transform.position = transform.transform_point(text_glyph.position.extend(0.));
                 let current_image_size = text_glyph.atlas_info.atlas_size;
                 // let scale_factor = 1f32;
-                let rect = text_glyph.rect;
+                let rect = text_glyph.atlas_info.texture_rect;
 
                 let mut vertices = Vec::new();
 
@@ -162,10 +219,12 @@ impl Renderer {
                 ]
                 .map(|pos| pos / current_image_size);
 
+                let glyph_rect = text_glyph.rect;
+
                 let positions: [[f32; 3]; 4] = QUAD_VERTEX_POSITIONS.map(|quad_pos| {
                     transform
                         .transform_point(
-                            ((quad_pos - Vec2::new(-0.5, -0.5)) * rect.size()).extend(0.),
+                            ((quad_pos - Vec2::new(-0.5, -0.5)) * glyph_rect.size()).extend(0.),
                         )
                         .into()
                 });
@@ -202,16 +261,20 @@ impl Renderer {
         self.draw_text(text, Transform::from_position(position));
     }
 
-    // pub fn draw_line(&mut self, line: &Line2D, color: &Color) {
-    //     self.push(LineMeshBuilder::new().line(line.0.extend(0.), line.1.extend(0.), color));
-    // }
+    pub fn draw_line(&mut self, line: &Line, color: &Color) {
+        self.push(LineMeshBuilder::new(self.default_shaders.line).line(line.0, line.1, color));
+    }
 
-    // pub fn draw_line_rect(&mut self, rect: &Rect, color: &Color) {
-    //     self.push(LineMeshBuilder::new().rect(rect, color.into()));
-    // }
+    pub fn draw_line_rect(&mut self, rect: &Rect, color: &Color) {
+        self.push(LineMeshBuilder::new(self.default_shaders.line).rect(rect, color.into()));
+    }
+
+    pub fn draw_line_from_points(&mut self, points: &Vec<Vec3>, color: &Color) {
+        self.push(LineMeshBuilder::new(self.default_shaders.line).points(points, color))
+    }
 
     pub fn draw_model(&mut self, model: &Model, transform: Transform) {
-        let mut mesh_builder = MeshBuilder::new(model.material)
+        let mut mesh_builder = MeshBuilder::new(model.material.clone())
             .with_indices(Indices::U32(model.indices.clone()))
             .with_attributes(
                 MeshAttribute::Position,
@@ -250,6 +313,58 @@ impl Renderer {
         }
 
         self.push(mesh_builder.build());
+    }
+
+    pub fn draw_quad(&mut self, quad: &Quad) {
+        let extent_x = quad.transform.scale.x / 2.0;
+        let extent_y = quad.transform.scale.y / 2.0;
+
+        // Just incase we want to be able to flip in the future
+        let flipped = false;
+
+        let (u_left, u_right) = if flipped { (1.0, 0.0) } else { (0.0, 1.0) };
+        // let vertices = [
+        //     ([-extent_x, -extent_y, 0.0], [0.0, 0.0, 1.0], [u_left, 1.0]),
+        //     ([-extent_x, extent_y, 0.0], [0.0, 0.0, 1.0], [u_left, 0.0]),
+        //     ([extent_x, extent_y, 0.0], [0.0, 0.0, 1.0], [u_right, 0.0]),
+        //     ([extent_x, -extent_y, 0.0], [0.0, 0.0, 1.0], [u_right, 1.0]),
+        // ];
+
+        let vertices = [
+            ([-extent_x, 0.0, extent_y], [0.0, 0.0, 1.0], [u_left, 1.0]),
+            ([-extent_x, 0.0, -extent_y], [0.0, 0.0, 1.0], [u_left, 0.0]),
+            ([extent_x, 0.0, -extent_y], [0.0, 0.0, 1.0], [u_right, 0.0]),
+            ([extent_x, 0.0, extent_y], [0.0, 0.0, 1.0], [u_right, 1.0]),
+        ];
+
+        let indices = Indices::U32(vec![0, 2, 1, 0, 3, 2]);
+
+        let positions: [[f32; 3]; 4] = vertices
+            .map(|(quad_pos, _, _)| quad.transform.transform_point(Vec3::from(quad_pos)).into());
+
+        let positions: Vec<_> = positions
+            .iter()
+            .map(|p| AttributeValue::Position(*p))
+            .collect();
+        // let normals: Vec<_> = vertices
+        //     .iter()
+        //     .map(|(_, n, _)| AttributeValue::Normal(*n))
+        //     .collect();
+        let uvs: Vec<_> = vertices
+            .iter()
+            .map(|(_, _, uv)| AttributeValue::UV(*uv))
+            .collect();
+
+        let mesh_builder = MeshBuilder::new(quad.material.clone())
+            .with_attributes(crate::mesh::MeshAttribute::Position, positions)
+            .with_attributes(crate::mesh::MeshAttribute::UV, uvs)
+            .with_attribute(
+                crate::mesh::MeshAttribute::Color,
+                AttributeValue::Color(quad.color.into()),
+            )
+            .with_indices(indices);
+
+        self.push(mesh_builder.build())
     }
 
     // pub fn draw_cube(&mut self, cube: &Cube, transform: Transform) {

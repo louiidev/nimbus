@@ -14,14 +14,14 @@ cfg-if = "1"
 asefile = "0.3.5"
 notify = { version = "5.1.0", optional = true }
 rodio = "0.17.1"
-winit = { version= "0.28", optional = true }
+winit = { version= "0.28.1", optional = true }
 sdl2 = { optional = true, features = ["raw-window-handle"], git = "https://github.com/Rust-SDL2/rust-sdl2", rev = "ffa4eb0" }
 gilrs = { optional = true, version = "0.10.2" }
 instant = { version = "0.1" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 fontdue = "0.7.3"
-wgpu = "0.16"
+wgpu = "0.16.0"
 guillotiere = "0.6.2"
 bytemuck = { version = "1.13.1", features = [ "derive" ] }
 raw-window-handle = "0.5.2"
@@ -31,6 +31,9 @@ egui_wgpu_backend = { version="0.23.0", optional=true }
 egui = { version ="0.21.0", optional=true}
 egui_inspect = { path = "../egui_inspect/egui_inspect/", optional=true }
 tobj = "4.0.0"
+yakui-winit = { path = "../yakui/crates/yakui-winit" }
+yakui-wgpu = { path = "../yakui/crates/yakui-wgpu" }
+yakui = { path = "../yakui/crates/yakui" }
 
 [features]
 default = ["winit", "hot-reloading", "egui"]

@@ -5,25 +5,8 @@ pub struct Material {
     pub texture: ArenaId<Texture>,
     normals_texture: Option<ArenaId<Texture>>,
     name: String,
-    shader: ArenaId<Shader>,
+    pub shader: ArenaId<Shader>,
 }
-
-// #[derive(Debug)]
-// pub struct Material2D {
-//     texture: ArenaId<Texture>,
-//     name: String,
-//     shader: ArenaId<Shader>,
-// }
-
-// impl Default for Material2D {
-//     fn default() -> Self {
-//         Self {
-//             texture: ArenaId::first(),
-//             name: "Default 2D Material".to_string(),
-//             shader: ArenaId::first(),
-//         }
-//     }
-// }
 
 impl Material {
     pub fn new(shader: ArenaId<Shader>) -> Self {

@@ -1,6 +1,7 @@
 use gilrs::{Filter, Gilrs};
 use glam::{UVec2, Vec2};
-use winit::event::DeviceEvent;
+use winit::dpi::PhysicalPosition;
+use winit::event::{DeviceEvent, MouseScrollDelta};
 use winit::window::Window as ExternalWindow;
 use winit::{dpi::LogicalSize, event_loop::EventLoop, window::WindowBuilder};
 
@@ -12,6 +13,7 @@ use super::{WindowAbstraction, WindowDescriptor, WindowEngineAbstraction};
 pub struct Window {
     pub(crate) window: ExternalWindow,
     event_loop: Option<EventLoop<()>>,
+    yakui_winit: yakui_winit::YakuiWinit,
 }
 
 #[derive(Default)]
@@ -37,6 +39,8 @@ impl WindowAbstraction for Window {
         let event_loop = EventLoop::new();
 
         let window = window_builder.build(&event_loop).unwrap();
+
+        let yakui_winit = yakui_winit::YakuiWinit::new(&window);
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -64,6 +68,7 @@ impl WindowAbstraction for Window {
         }
 
         Self {
+            yakui_winit,
             window,
             event_loop: Some(event_loop),
         }
@@ -109,6 +114,7 @@ impl WindowEngineAbstraction for Engine {
 
             #[cfg(feature = "egui")]
             self.egui_platform.handle_event(&event);
+            self.window.yakui_winit.handle_event(&mut self.yakui, &event);
 
             match event {
                 Event::DeviceEvent {
@@ -159,6 +165,13 @@ impl WindowEngineAbstraction for Engine {
                             Vec2::new(position.x as f32, position.y as f32),
                             self.window_size,
                         );
+                    }
+                    WindowEvent::MouseWheel { device_id, delta, phase, modifiers } => {
+                        self.input.scroll_value = match delta {
+                            // I'm assuming a line is about 100 pixels
+                            MouseScrollDelta::LineDelta(_, scroll) => -scroll * 0.5,
+                            MouseScrollDelta::PixelDelta(PhysicalPosition { y: scroll, .. }) => -*scroll as f32,
+                        };
                     }
                     _ => {}
                 },

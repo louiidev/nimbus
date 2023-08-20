@@ -222,7 +222,7 @@ impl Engine {
         for mat in materials.unwrap() {
             if let Some(texture_path) = mat.diffuse_texture {
                 let texture_handle = self.load_texture(&parent_path.join(texture_path));
-                model.texture = texture_handle;
+                model.material.texture = texture_handle;
             }
         }
 

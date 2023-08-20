@@ -3,49 +3,47 @@ use super::{
     mesh::{AttributeValue, Mesh, MeshAttribute, MeshBuilder},
     rect::Rect,
 };
-use crate::{arena::ArenaId, components::color::Color};
+use crate::{arena::ArenaId, components::color::Color, shader::Shader};
 use glam::Vec3;
 use wgpu::include_wgsl;
 
 #[derive(Debug)]
 pub struct LineMaterial;
 
-impl Material for LineMaterial {
-    fn shader(&self) -> wgpu::ShaderModuleDescriptor {
-        include_wgsl!("./default_shaders/line.wgsl")
-    }
+// impl Material for LineMaterial {
+//     fn shader(&self) -> wgpu::ShaderModuleDescriptor {
+//         include_wgsl!("./default_shaders/line.wgsl")
+//     }
 
-    fn vertex_attributes(&self) -> std::collections::BTreeSet<MeshAttribute> {
-        std::collections::BTreeSet::from([MeshAttribute::Position, MeshAttribute::Color])
-    }
+//     fn vertex_attributes(&self) -> std::collections::BTreeSet<MeshAttribute> {
+//         std::collections::BTreeSet::from([MeshAttribute::Position, MeshAttribute::Color])
+//     }
 
-    fn topology(&self) -> wgpu::PrimitiveTopology {
-        wgpu::PrimitiveTopology::LineStrip
-    }
+//     fn topology(&self) -> wgpu::PrimitiveTopology {
+//         wgpu::PrimitiveTopology::LineStrip
+//     }
 
-    fn has_texture(&self) -> bool {
-        false
-    }
+//     fn has_texture(&self) -> bool {
+//         false
+//     }
 
-    fn filterable_texture(&self) -> bool {
-        false
-    }
+//     fn filterable_texture(&self) -> bool {
+//         false
+//     }
 
-    fn label(&self) -> &str {
-        "Line Material"
-    }
-}
+//     fn label(&self) -> &str {
+//         "Line Material"
+//     }
+// }
 
 pub struct LineMeshBuilder {
     mesh_builder: MeshBuilder,
 }
 
 impl LineMeshBuilder {
-    pub fn new() -> Self {
-        let mb = MeshBuilder::new();
-
+    pub fn new(line_shader: ArenaId<Shader>) -> Self {
         Self {
-            mesh_builder: mb.with_material(ArenaId::second()).with_batch(false),
+            mesh_builder: MeshBuilder::new(Material::new(line_shader)),
         }
     }
 
@@ -57,6 +55,22 @@ impl LineMeshBuilder {
                     AttributeValue::Position(a.into()),
                     AttributeValue::Position(b.into()),
                 ],
+            )
+            .with_attribute(
+                MeshAttribute::Color,
+                super::mesh::AttributeValue::Color(color.as_rgba_f32()),
+            )
+            .build()
+    }
+
+    pub fn points(self, verts: &Vec<Vec3>, color: &Color) -> Mesh {
+        self.mesh_builder
+            .with_attributes(
+                MeshAttribute::Position,
+                verts
+                    .iter()
+                    .map(|v| AttributeValue::Position((*v).into()))
+                    .collect(),
             )
             .with_attribute(
                 MeshAttribute::Color,
